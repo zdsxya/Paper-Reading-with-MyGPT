@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Key Estimation Humanoid Locomotion 论文深度解读｜“估计什么最关键？”</title>
+  <meta name="description" content="Toward Understanding Key Estimation in Learning Robust Humanoid Locomotion（arXiv:2403.05868v1）中文深度解读与复现级实验整理" />
+  <meta name="color-scheme" content="light dark" />
+
+  <style>
+    :root{
+      --bg:#0b0c10; --bg2:#0f1117;
+      --card:#121524; --card2:#14182a;
+      --text:#e9ecf1; --muted:#a8b0c2; --faint:#6e7892;
+      --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.12);
+      --accent:#7cd4ff; --accent2:#a78bfa; --good:#34d399; --warn:#fbbf24; --bad:#fb7185;
+      --shadow:0 18px 60px rgba(0,0,0,.45); --shadow2:0 10px 30px rgba(0,0,0,.35);
+      --radius:22px; --radius2:14px;
+      --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+      --sans:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji";
+      --max:1160px; --blur:blur(14px);
+    }
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f6f7fb; --bg2:#ffffff;
+        --card:#ffffff; --card2:#fbfcff;
+        --text:#0b1220; --muted:#3a4762; --faint:#6a7896;
+        --line:rgba(12,18,32,.08); --line2:rgba(12,18,32,.12);
+        --shadow:0 18px 60px rgba(12,18,32,.12); --shadow2:0 10px 30px rgba(12,18,32,.10);
+      }
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background:
+        radial-gradient(1400px 900px at 20% -10%, rgba(124,212,255,.25), transparent 55%),
+        radial-gradient(1200px 900px at 90% 0%, rgba(167,139,250,.22), transparent 52%),
+        radial-gradient(1100px 800px at 50% 120%, rgba(52,211,153,.12), transparent 60%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
+      color:var(--text);
+      overflow-x:hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    a{ color:inherit; text-decoration:none; }
+    ::selection{ background: rgba(124,212,255,.25); }
+
+    .container{ width:min(var(--max), calc(100% - 42px)); margin:0 auto; }
+    .topbar{
+      position:sticky; top:0; z-index:50;
+      background: rgba(10,12,16,.42);
+      border-bottom:1px solid var(--line);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+    }
+    @media (prefers-color-scheme: light){ .topbar{ background: rgba(255,255,255,.65); } }
+    .topbar-inner{ display:flex; align-items:center; justify-content:space-between; padding:14px 0; gap:14px; }
+    .brand{ display:flex; align-items:center; gap:10px; user-select:none; }
+    .logo{
+      width:34px; height:34px; border-radius:12px;
+      background:
+        radial-gradient(14px 14px at 30% 30%, rgba(124,212,255,.9), transparent 55%),
+        radial-gradient(18px 18px at 75% 35%, rgba(167,139,250,.85), transparent 60%),
+        radial-gradient(20px 20px at 60% 80%, rgba(52,211,153,.55), transparent 62%),
+        linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.06));
+      border:1px solid var(--line2);
+      box-shadow: var(--shadow2);
+    }
+    .brand h1{ margin:0; font-size:14px; letter-spacing:.2px; font-weight:650; }
+    .brand .sub{ font-size:12px; color:var(--faint); margin-top:1px; }
+
+    .nav{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+    .pill{
+      padding:8px 10px; border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--muted);
+      font-size:12px;
+      transition: transform .18s ease, background .18s ease, border-color .18s ease;
+      cursor:pointer; user-select:none;
+    }
+    @media (prefers-color-scheme: light){ .pill{ background: rgba(12,18,32,.04); } }
+    .pill:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); border-color: var(--line2); }
+    .pill.active{
+      color:var(--text);
+      border-color: rgba(124,212,255,.45);
+      background: linear-gradient(180deg, rgba(124,212,255,.20), rgba(255,255,255,.06));
+    }
+    .pill .dot{
+      display:inline-block; width:7px; height:7px; border-radius:99px;
+      margin-right:7px; background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(124,212,255,.12); vertical-align:middle;
+    }
+
+    header.hero{ padding:54px 0 28px; position:relative; }
+    .hero-grid{ display:grid; grid-template-columns: 1.25fr .85fr; gap:18px; align-items:start; }
+    @media (max-width: 980px){ .hero-grid{ grid-template-columns: 1fr; } }
+    .hero h2{
+      font-size: clamp(28px, 3.6vw, 44px);
+      line-height:1.08;
+      letter-spacing:-.7px;
+      margin:0 0 12px;
+      font-weight:760;
+    }
+    .hero p{
+      margin:0 0 18px;
+      color:var(--muted);
+      font-size: 15.5px;
+      line-height:1.65;
+      max-width: 72ch;
+    }
+    .chips{ display:flex; flex-wrap:wrap; gap:10px; margin-top: 12px; }
+    .chip{
+      border-radius:999px; padding:9px 11px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      font-size:12px; color:var(--muted);
+      display:flex; align-items:center; gap:8px;
+    }
+    .chip b{ color:var(--text); font-weight:650; }
+    .chip .tag{
+      font-family:var(--mono); font-size:11px;
+      color:rgba(124,212,255,.9);
+      background: rgba(124,212,255,.10);
+      border:1px solid rgba(124,212,255,.20);
+      padding:3px 6px; border-radius:999px;
+    }
+
+    .card{
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      border:1px solid var(--line);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      position:relative;
+    }
+    @media (prefers-color-scheme: light){
+      .card{ background: linear-gradient(180deg, rgba(255,255,255,1), rgba(250,252,255,1)); }
+    }
+    .card-inner{ padding:18px; }
+    .card h3{ margin:0 0 10px; font-size:14px; letter-spacing:.2px; font-weight:700; color:var(--text); }
+
+    .kpi{ display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; }
+    .kpi .box{
+      border:1px solid var(--line);
+      border-radius: 16px;
+      padding:12px 12px 10px;
+      background: rgba(255,255,255,.05);
+      position:relative;
+      overflow:hidden;
+    }
+    .kpi .label{ font-size:11px; color:var(--faint); margin-bottom:6px; }
+    .kpi .value{ font-size:18px; letter-spacing:-.2px; font-weight:750; }
+    .kpi .hint{ margin-top:6px; font-size:11px; color:var(--muted); line-height:1.35; }
+
+    .cta-row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    .btn{
+      border-radius:999px; padding:10px 12px;
+      border:1px solid var(--line2);
+      background: rgba(255,255,255,.06);
+      color:var(--text); font-size:12px; font-weight:650;
+      cursor:pointer;
+      transition: transform .18s ease, background .18s ease, border-color .18s ease;
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); }
+    .btn.primary{
+      border-color: rgba(124,212,255,.55);
+      background: linear-gradient(180deg, rgba(124,212,255,.20), rgba(255,255,255,.06));
+    }
+    .btn .ic{
+      width:16px; height:16px; display:inline-block; border-radius:5px;
+      background: radial-gradient(circle at 35% 35%, rgba(255,255,255,.85), rgba(255,255,255,.2));
+      border:1px solid rgba(255,255,255,.22);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.05);
+    }
+
+    main{ padding: 10px 0 70px; }
+    section{ padding: 20px 0; scroll-margin-top: 86px; }
+    .section-title{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 8px 0 14px; }
+    .section-title h2{ margin:0; font-size:18px; letter-spacing:-.2px; font-weight:780; }
+    .section-title .meta{ color:var(--faint); font-size:12px; line-height:1.35; text-align:right; }
+
+    .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+    @media (max-width: 920px){ .grid-2{ grid-template-columns:1fr; } }
+    .grid-3{ display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; }
+    @media (max-width: 980px){ .grid-3{ grid-template-columns:1fr; } }
+
+    .prose{ color:var(--muted); font-size:14.5px; line-height:1.78; }
+    .prose b{ color:var(--text); }
+    .prose em{ color: rgba(124,212,255,.95); font-style:normal; }
+    .hr{ height:1px; background: var(--line); margin: 16px 0; }
+
+    .callout{
+      border-radius: var(--radius);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+      padding: 14px 14px 12px;
+      position:relative;
+      overflow:hidden;
+    }
+    .callout:before{
+      content:"";
+      position:absolute; inset:-140px -180px auto auto;
+      width:320px; height:320px;
+      background:
+        radial-gradient(circle at 30% 35%, rgba(167,139,250,.20), transparent 60%),
+        radial-gradient(circle at 75% 55%, rgba(124,212,255,.18), transparent 62%);
+      transform: rotate(8deg);
+      pointer-events:none;
+    }
+    .callout .title{ display:flex; align-items:center; gap:10px; margin-bottom:8px; color:var(--text); font-weight:760; letter-spacing:-.2px; }
+    .badge{
+      font-size:11px; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--line2);
+      color: var(--muted); background: rgba(255,255,255,.06);
+    }
+    .badge.good{ border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.10); color: rgba(52,211,153,.95); }
+    .badge.warn{ border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.10); color: rgba(251,191,36,.95); }
+    .badge.bad { border-color: rgba(251,113,133,.35); background: rgba(251,113,133,.10); color: rgba(251,113,133,.95); }
+
+    .list{ margin:10px 0 0; padding-left: 18px; color:var(--muted); }
+    .list li{ margin: 7px 0; }
+    .mono{ font-family: var(--mono); font-size: 12.2px; color: rgba(124,212,255,.92); }
+    .code{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(233,236,241,.92);
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px 12px;
+      overflow:auto;
+      line-height:1.55;
+    }
+    @media (prefers-color-scheme: light){ .code{ background: rgba(12,18,32,.04); } }
+
+    .table{
+      width:100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow:hidden;
+      border:1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,.04);
+    }
+    .table th, .table td{
+      padding: 10px 10px;
+      border-bottom:1px solid var(--line);
+      color:var(--muted);
+      font-size: 12.8px;
+      line-height:1.45;
+      vertical-align:top;
+    }
+    .table th{ text-align:left; color:var(--text); font-weight: 730; background: rgba(255,255,255,.06); }
+    .table tr:last-child td{ border-bottom:none; }
+    .table .right{ text-align:right; }
+    .table .nowrap{ white-space:nowrap; }
+    .table .strong{ color:var(--text); font-weight:700; }
+
+    .figure{
+      border-radius: var(--radius);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      overflow:hidden;
+    }
+    .figure .img{
+      aspect-ratio: 16 / 9;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02)),
+        radial-gradient(600px 240px at 20% 20%, rgba(124,212,255,.18), transparent 55%),
+        radial-gradient(500px 280px at 80% 30%, rgba(167,139,250,.18), transparent 58%),
+        radial-gradient(520px 320px at 60% 90%, rgba(52,211,153,.10), transparent 58%);
+      display:flex; align-items:center; justify-content:center;
+      padding: 14px; position:relative;
+    }
+    .figure .img .ph{
+      border:1px dashed rgba(255,255,255,.25);
+      color: rgba(233,236,241,.72);
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      max-width: 92%;
+      text-align:center;
+      backdrop-filter: blur(8px);
+      background: rgba(0,0,0,.15);
+    }
+    @media (prefers-color-scheme: light){
+      .figure .img .ph{
+        border-color: rgba(12,18,32,.22);
+        background: rgba(255,255,255,.55);
+        color: rgba(12,18,32,.70);
+      }
+    }
+    .figure .cap{
+      padding: 12px 14px;
+      border-top:1px solid var(--line);
+      color:var(--muted);
+      font-size:12.6px;
+      line-height:1.55;
+    }
+    .figure .cap b{ color:var(--text); }
+
+    .accordion{ border-radius: var(--radius); border:1px solid var(--line); background: rgba(255,255,255,.04); overflow:hidden; }
+    details{ border-top:1px solid var(--line); }
+    details:first-child{ border-top:none; }
+    summary{
+      list-style:none;
+      padding: 13px 14px;
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px;
+      color:var(--text);
+      font-weight:720;
+      font-size: 13px;
+      user-select:none;
+    }
+    summary::-webkit-details-marker{ display:none; }
+    .chev{
+      width:10px; height:10px;
+      border-right:2px solid var(--muted);
+      border-bottom:2px solid var(--muted);
+      transform: rotate(-45deg);
+      transition: transform .18s ease;
+      flex:0 0 auto;
+      margin-left: 8px;
+    }
+    details[open] .chev{ transform: rotate(45deg); }
+    .detail-body{ padding: 0 14px 14px; color: var(--muted); font-size: 13.8px; line-height: 1.75; }
+
+    .tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 12px; }
+    .tab{
+      padding:8px 10px; border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+      color:var(--muted);
+      font-size:12px; cursor:pointer; user-select:none;
+    }
+    .tab.active{
+      border-color: rgba(124,212,255,.45);
+      color:var(--text);
+      background: linear-gradient(180deg, rgba(124,212,255,.20), rgba(255,255,255,.06));
+    }
+    .tabpanel{ display:none; }
+    .tabpanel.active{ display:block; }
+
+    .reveal{ opacity:0; transform: translateY(10px); transition: opacity .55s ease, transform .55s ease; }
+    .reveal.show{ opacity:1; transform: translateY(0); }
+
+    .diagram{
+      width:100%;
+      height:auto;
+      display:block;
+      background: rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      overflow:hidden;
+    }
+
+    .footer{
+      padding: 28px 0 46px;
+      color:var(--faint);
+      font-size:12px;
+      border-top: 1px solid var(--line);
+      margin-top: 30px;
+    }
+    .footer .row{
+      display:flex;
+      gap:12px;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      align-items:flex-end;
+    }
+    .tiny{ font-size:11px; color:var(--faint); line-height:1.55; }
+    .kbd{
+      font-family:var(--mono); font-size:11px;
+      border:1px solid var(--line);
+      padding: 2px 6px; border-radius: 8px;
+      background: rgba(255,255,255,.05);
+      color:var(--muted);
+    }
+
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:22px;
+      transform: translateX(-50%);
+      background: rgba(10,12,16,.72);
+      border:1px solid var(--line2);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      box-shadow: var(--shadow2);
+      backdrop-filter: var(--blur);
+      display:none;
+      z-index:60;
+      max-width:min(520px, calc(100% - 34px));
+      text-align:center;
+    }
+    @media (prefers-color-scheme: light){ .toast{ background: rgba(255,255,255,.72); } }
+  </style>
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="container">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <h1>Key Estimation 深度解读</h1>
+            <div class="sub">面向类人行走：显式估计变量究竟谁最关键？</div>
+          </div>
+        </div>
+        <div class="nav" aria-label="导航">
+          <div class="pill active" data-jump="#motivation"><span class="dot"></span>动机</div>
+          <div class="pill" data-jump="#method">方法</div>
+          <div class="pill" data-jump="#math">数学建模</div>
+          <div class="pill" data-jump="#experiments">实验&复现</div>
+          <div class="pill" data-jump="#results">结果&洞察</div>
+          <div class="pill" data-jump="#review">锐评</div>
+          <div class="pill" data-jump="#questions">思考题</div>
+          <div class="pill" data-jump="#more">One More Thing</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <header class="hero">
+    <div class="container">
+      <div class="hero-grid">
+        <div class="reveal">
+          <h2>“估计什么”比“估计得多”更重要：<span style="color:rgba(124,212,255,.95)">Key Estimation</span> 的类人行走框架</h2>
+          <p>
+            这篇论文（arXiv:2403.05868v1）聚焦一个常被默认、但很少被<strong>定量分析</strong>的问题：
+            学习型类人行走策略里，我们常把“估计器”当作提高鲁棒性/跨 sim-to-real 的必选项，但<strong>不同估计变量对动作决策的贡献差异巨大</strong>。
+            作者用<strong>集成梯度（Integrated Gradients）显著性分析</strong>对显式估计项做排名，发现<strong>机体线速度估计</strong>的相对重要性平均高达 <em>0.845</em>（远超其它项），其次是<strong>脚周围小高度图</strong>；而基座高度与部分隐式编码对最终动作影响较小。
+            随后作者构造多组“估计组合策略”进行系统对比，最终证明：只选<strong>最关键的两项显式估计（Key2：速度 + 脚周高度图）</strong>在真实机器人 Wukong-IV 上综合表现最好（跟踪精度 + 多地形通过率）。
+          </p>
+
+          <div class="chips" aria-label="关键词">
+            <div class="chip"><span class="tag">Asym-AC</span><b>不对称 Actor-Critic</b>：critic 吃特权信息</div>
+            <div class="chip"><span class="tag">Key Est.</span><b>关键估计</b>：速度最关键</div>
+            <div class="chip"><span class="tag">IG</span><b>显著性分析</b>：Integrated Gradients</div>
+            <div class="chip"><span class="tag">Auto-Enc</span><b>自编码</b>：重构 proprioception</div>
+            <div class="chip"><span class="tag">Sim2Real</span><b>实机验证</b>：楼梯/坡地/草地/金属障碍</div>
+          </div>
+        </div>
+
+        <div class="card reveal">
+          <div class="card-inner">
+            <h3>一眼读懂这篇论文</h3>
+            <div class="kpi">
+              <div class="box">
+                <div class="label">核心问题</div>
+                <div class="value">估计谁最值钱？</div>
+                <div class="hint">用显著性分析量化“估计变量→动作”的影响（式(13)-(19)）</div>
+              </div>
+              <div class="box">
+                <div class="label">最关键估计</div>
+                <div class="value">线速度（0.845）</div>
+                <div class="hint">显著性饼图与箱线图见 Fig.3（第4页）</div>
+              </div>
+              <div class="box">
+                <div class="label">最佳组合</div>
+                <div class="value">Key2 = 速度 + 脚周高度图</div>
+                <div class="hint">多地形通过率全面最佳（Table I 第6页）</div>
+              </div>
+              <div class="box">
+                <div class="label">控制频率</div>
+                <div class="value">Policy 100Hz / PD 1kHz</div>
+                <div class="hint">动作是期望关节角，PD 执行（第2页 II-B）</div>
+              </div>
+            </div>
+
+            <div class="cta-row" style="margin-top:14px">
+              <button class="btn primary" id="btnJumpRepro"><span class="ic"></span>直接跳到「复现清单」</button>
+              <button class="btn" id="btnCopyBib"><span class="ic"></span>复制 BibTeX（占位）</button>
+              <button class="btn" id="btnToggleMath"><span class="ic"></span>重渲染 LaTeX</button>
+            </div>
+
+            <div class="hr"></div>
+            <div class="tiny">
+              论文：<span class="mono">Toward Understanding Key Estimation in Learning Robust Humanoid Locomotion</span>（arXiv:2403.05868v1）<br/>
+              页内所有公式支持 LaTeX（包含行内公式，且不会换行）。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+
+      <!-- 动机 -->
+      <section id="motivation" class="reveal">
+        <div class="section-title">
+          <h2>研究动机：类人行走里，“估计”是刚需，但我们从没问过它值不值</h2>
+          <div class="meta">对应论文：摘要 + 引言（第1页）</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>现实矛盾：信息越多越好，但真机拿不到</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  从控制理论直觉看，策略获得的信息越多，性能上限越高；但真实机器人部署时，很多量<strong>不可得/昂贵/不可靠</strong>：接触力、可变形地表属性、精确线速度等（第1页右栏）。
+                  这些被称为<strong>特权信息（privileged information）</strong>。
+                </p>
+                <p>
+                  学习型方法因此引入估计模块：RMA 一类方法把特权信息压到 latent 向量里（难解释、两阶段训练低效）；也有工作显式估计速度/高度图进一步提升地形适应（第1页）。
+                </p>
+                <p style="margin-bottom:0">
+                  但一个关键空白始终存在：<b>“估计变量的重要性”缺乏定量研究</b>。尤其是类人（高自由度、任务空间窄、扰动复杂），不同估计项对动作决策可能是“天壤之别”。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>作者提出的三个问题（其实都是工程选型问题）</h3>
+              <div class="callout">
+                <div class="title"><span class="badge good">论文问题意识</span>把“估计设计”从经验活变成可量化决策</div>
+                <div class="prose">
+                  <ol class="list" style="margin-top:0">
+                    <li>估计应该是<strong>显式</strong>还是<strong>隐式</strong>？</li>
+                    <li>到底<strong>该估计哪些变量</strong>？</li>
+                    <li>估计<strong>如何帮助策略</strong>完成行走任务？</li>
+                  </ol>
+                  <p style="margin:0">
+                    本文的主线：先训练“全估计策略”，再用显著性分析对估计项排序，提出<strong>最优组合</strong>，最后用系统性对比在仿真与实机验证（第2页开头 + III 节）。
+                  </p>
+                </div>
+              </div>
+
+              <div class="hr"></div>
+              <div class="prose">
+                <p style="margin:0">
+                  你可以把这篇工作当作一份“类人行走估计模块的 A/B test 报告”，但它比经验报告更硬：它给了显著性公式、对比组、指标与实机地形通过率。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 方法 -->
+      <section id="method" class="reveal">
+        <div class="section-title">
+          <h2>方法总览：Key Estimation Policy = 显式估计 + 隐式编码 + 自监督重构 + 不对称 critic</h2>
+          <div class="meta">对应论文：Fig.1/2 + II 节（第1–3页）</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="figure">
+            <div class="img">
+              <div class="ph">Figure 1（第1页）：Key estimation policy 总览占位符<br/>检索关键词：<span class="mono">Fig. 1 Overview of key estimation policy</span></div>
+            </div>
+            <div class="cap">
+              <b>Fig.1 语义：</b>从历史本体感觉 \(o_{t:t-h}\) 编码出显式估计 \(\hat e_t\)、隐式编码 \(z_t\) 与其他结构化表示（文中还出现 \(H_t, \hat h_t\) 等），再喂给 policy 产生动作。
+              核心不是“估计越多越好”，而是<strong>找出关键估计变量并设计组合</strong>。
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>Fig.2 里的框架：一个“可控 + 可解释”的估计-控制耦合</h3>
+              <div class="accordion">
+                <details open>
+                  <summary>① 不对称 Actor-Critic：actor 只看现实可得，critic 吃特权信息<span class="chev"></span></summary>
+                  <div class="detail-body">
+                    <p style="margin-top:0">
+                      为避免 teacher-student 多阶段训练与 imitation 误差，作者采用不对称 actor-critic（第2页 II-A）：
+                      <b>actor</b> 只访问 0.5s 历史本体感觉（含延迟噪声与指令），<b>critic</b> 访问全状态与特权信息 \(P_t\)。
+                      这种“训练信息差”让策略可以在训练时享受更稳的价值学习，但部署时仍保持可落地的观测集。
+                    </p>
+                  </div>
+                </details>
+                <details>
+                  <summary>② Actor = 自编码器（\(\mu,\eta\)）+ Backbone policy（\(\psi\)）<span class="chev"></span></summary>
+                  <div class="detail-body">
+                    <p style="margin-top:0">
+                      Encoder \(\mu\) 输入 0.5s 历史 proprioception，输出两种编码：<b>隐式 \(z_t\)</b> 与<b>显式估计 \(\hat e_t\)</b>（第2页 Fig.2 图注）。
+                      Decoder \(\eta\) 用 \(z_t,\hat e_t\) 重构当前 proprioception \(o_t\)（自监督信号）。
+                      Backbone policy \(\psi\) 将 \((o_t, z_t, \hat e_t)\) 映射到关节位置目标动作 \(a_t\)。
+                    </p>
+                    <p style="margin-bottom:0">
+                      这样做的直觉：显式估计提供可解释“关键量”，隐式编码补充显式之外的信息（尤其 sim-to-real 时），而重构损失迫使编码携带“足够解释观测”的动力学线索。
+                    </p>
+                  </div>
+                </details>
+                <details>
+                  <summary>③ “Key estimation”的实验套路：先全估计，再做显著性排序，再做组合对比<span class="chev"></span></summary>
+                  <div class="detail-body">
+                    <p style="margin-top:0">
+                      作者先训练一个 FullEst（显式估计：速度、基座高度、脚周高度图；另加固定宽度隐式编码用于显著性分析），
+                      用 Integrated Gradients 计算每类输入对动作输出的贡献（式(13)-(19)，第3页），得到 Fig.3 的重要性排名。
+                      接着构造 EstNet / Key1 / Key2 / FullEst / IrrEst / Implicit 六组策略，统一训练配置后做系统评测（第5页 C-D）。
+                    </p>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="figure" style="margin-top:14px">
+          <div class="img">
+            <div class="ph">Figure 2（第2页）：Architecture of the proposed policy 占位符<br/>检索关键词：<span class="mono">Fig. 2 Architecture of the proposed policy</span></div>
+          </div>
+          <div class="cap">
+            <b>Fig.2 读图要点：</b>
+            actor 侧 Encoder 输出 \((z_t,\hat e_t)\)，Decoder 重构观测；Backbone \(\psi\) 输出动作；critic 输入包含 \(o_t\) 与特权信息 \(P_t\)（其中包括真值 \(e_t\) 及其它数据）。
+            Policy 使用 PPO 优化；训练总损失是 policy gradient + 预测重构 + 估计拟合的加权和（第2页 II-A）。
+          </div>
+        </div>
+
+        <!-- 重绘流程图 -->
+        <div style="margin-top:14px" class="reveal">
+          <svg class="diagram" viewBox="0 0 1200 390" role="img" aria-label="Key Estimation：训练与部署信息流（重绘）">
+            <defs>
+              <linearGradient id="g1" x1="0" x2="1">
+                <stop offset="0" stop-color="rgba(124,212,255,.35)"/>
+                <stop offset="1" stop-color="rgba(167,139,250,.30)"/>
+              </linearGradient>
+              <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="rgba(0,0,0,.35)"/>
+              </filter>
+            </defs>
+            <rect x="0" y="0" width="1200" height="390" fill="rgba(255,255,255,.02)"/>
+            <text x="26" y="38" fill="rgba(233,236,241,.90)" font-size="16" font-weight="700">Key Estimation Policy 信息流（按 Fig.2 语义重绘）</text>
+            <text x="26" y="62" fill="rgba(168,176,194,.85)" font-size="12">Actor：0.5s 历史 proprioception → 显式估计 + 隐式编码 + 重构；Critic：额外特权信息</text>
+
+            <g filter="url(#shadow)">
+              <rect x="26" y="92" rx="18" ry="18" width="340" height="250" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.10)"/>
+              <text x="52" y="126" fill="rgba(233,236,241,.92)" font-size="13" font-weight="700">输入（Actor 可得）</text>
+              <text x="52" y="152" fill="rgba(168,176,194,.92)" font-size="12">\(\;o_{t-h:t}\)（0.5s 历史，含噪声/延迟）</text>
+              <text x="52" y="176" fill="rgba(168,176,194,.92)" font-size="12">观测维度：\(O_t\in\mathbb{R}^{42}\)</text>
+
+              <rect x="52" y="204" rx="14" ry="14" width="288" height="114" fill="rgba(0,0,0,.16)" stroke="rgba(255,255,255,.10)"/>
+              <text x="68" y="232" fill="rgba(233,236,241,.88)" font-size="12" font-weight="700">Encoder \(\mu\)</text>
+              <text x="68" y="255" fill="rgba(168,176,194,.92)" font-size="12">输出：\(z_t\)（隐式） + \(\hat e_t\)（显式估计）</text>
+              <text x="68" y="278" fill="rgba(168,176,194,.92)" font-size="12">显式变量：速度/高度/脚周高度图（可选组合）</text>
+            </g>
+
+            <g filter="url(#shadow)">
+              <rect x="390" y="112" rx="18" ry="18" width="360" height="210" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.10)"/>
+              <text x="414" y="146" fill="rgba(233,236,241,.92)" font-size="13" font-weight="700">Decoder \(\eta\) + Backbone policy \(\psi\)</text>
+              <text x="414" y="172" fill="rgba(168,176,194,.92)" font-size="12">重构：\(\tilde o_t = \eta(z_t,\hat e_t)\)（预测/重构损失）</text>
+              <text x="414" y="196" fill="rgba(168,176,194,.92)" font-size="12">动作：\(a_t=\psi(o_t,z_t,\hat e_t)\in\mathbb{R}^{21}\)（期望关节角）</text>
+              <text x="414" y="220" fill="rgba(168,176,194,.92)" font-size="12">执行：PD @ 1kHz，policy @ 100Hz</text>
+              <text x="414" y="244" fill="rgba(168,176,194,.92)" font-size="12">训练：PPO（见 Table III）</text>
+            </g>
+
+            <g filter="url(#shadow)">
+              <rect x="786" y="92" rx="18" ry="18" width="388" height="250" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.10)"/>
+              <text x="810" y="126" fill="rgba(233,236,241,.92)" font-size="13" font-weight="700">Critic（训练期）</text>
+              <text x="810" y="152" fill="rgba(168,176,194,.92)" font-size="12">输入：\(o_t\) + 特权信息 \(P_t\in\mathbb{R}^{103}\)</text>
+              <text x="810" y="176" fill="rgba(168,176,194,.92)" font-size="12">其中含：真值 \(e_t\)（速度/高度/小高度图）</text>
+              <text x="810" y="200" fill="rgba(168,176,194,.92)" font-size="12">另含：更大范围基座周高度图（不可显式估计）</text>
+
+              <rect x="810" y="226" rx="14" ry="14" width="340" height="92" fill="rgba(0,0,0,.16)" stroke="rgba(255,255,255,.10)"/>
+              <text x="826" y="254" fill="rgba(233,236,241,.88)" font-size="12" font-weight="700">显著性分析（IG）</text>
+              <text x="826" y="277" fill="rgba(168,176,194,.92)" font-size="12">量化：哪些估计变量最影响动作输出</text>
+              <text x="826" y="300" fill="rgba(168,176,194,.92)" font-size="12">结果：速度最关键，脚周高度图第二</text>
+            </g>
+
+            <g stroke="url(#g1)" stroke-width="2.2" fill="none" opacity=".95">
+              <path d="M366,246 C380,246 380,246 390,246" />
+              <path d="M750,210 C768,210 768,210 786,210" />
+            </g>
+            <g fill="rgba(124,212,255,.80)">
+              <circle cx="390" cy="246" r="3.5"/>
+              <circle cx="786" cy="210" r="3.5"/>
+            </g>
+
+            <text x="26" y="372" fill="rgba(110,120,146,.92)" font-size="11">
+              关键点：部署期不需要特权信息；但训练期用 critic 的特权输入能稳定学习与显著性分析。
+            </text>
+          </svg>
+        </div>
+      </section>
+
+      <!-- 数学建模 -->
+      <section id="math" class="reveal">
+        <div class="section-title">
+          <h2>数学表示与建模：奖励核函数 + 显著性（IG）公式是本文“可迁移”的价值</h2>
+          <div class="meta">对应论文：II-C（第3页）+ II-C.4（第3页）</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>1) 奖励设计：用核函数塑形梯度（精度 vs 可学习性）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  作者引入两类 bell-shape kernel 来构造奖励项（第3页）：
+                </p>
+                <ul class="list">
+                  <li>Gaussian 核：\[
+                    G_{\alpha,\sigma}(x)=\alpha\exp\left(\left(\frac{x}{\sigma}\right)^2\right).
+                  \]</li>
+                  <li>Generalized Cauchy 核：\[
+                    C_{\alpha,\beta,\sigma}(x)=\alpha\left(\left(\frac{x}{\sigma}\right)^{2\beta}+1\right)^{-1},\quad \beta=1,2,\ldots
+                  \]</li>
+                </ul>
+                <p style="margin-bottom:0">
+                  解释（作者文字要点）：Gaussian 在零附近梯度“好用”，有利于精细跟踪；但远离零时梯度可能太小。
+                  Cauchy 重尾，远离零仍有梯度，且在 \((\pm\sigma,0.5)\) 处有稳定点便于调参；\(\beta\) 越大越“矩形”，在误差小于 \(\sigma\) 时惩罚更弱。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>2) 奖励项拆解：跟踪 / 步态 / 平滑与能耗</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  论文把奖励分为三类（第3页）：(1) base 命令跟踪，(2) 步态控制，(3) 平滑与能耗（含 CoT）。
+                </p>
+                <div class="accordion">
+                  <details open>
+                    <summary>Base 命令跟踪<span class="chev"></span></summary>
+                    <div class="detail-body">
+                      <p style="margin-top:0">
+                        \[
+                          r_v = G_{0.1,0.02}\big(\lVert v_t^\ast - v_t\rVert\big),\quad
+                          r_\omega = G_{0.1,0.02}\big(\lVert \omega_t^\ast - \omega_t\rVert\big)
+                        \]
+                        \[
+                          r_r = G_{0.1,0.0025}(1-R_{2,2}^2),\quad
+                          r_h = G_{0.2,0.02}(\lvert h^\ast - h\rvert)
+                        \]
+                        其中 \(1-R_{2,2}\) 衡量 base 的 \(Z\) 轴与世界系偏差（第3页式(3)-(6)解释）。
+                      </p>
+                    </div>
+                  </details>
+                  <details>
+                    <summary>步态（gait）奖励/惩罚（继承自 [38]）<span class="chev"></span></summary>
+                    <div class="detail-body">
+                      <p style="margin-top:0">
+                        通过摆动相惩罚接触力、支撑相惩罚足端速度（第3页式(7)-(8)）：
+                        \[
+                          r_{eVel} = C_{0.1,1,8}(Q_{v,l}V_l + Q_{v,r}V_r),\quad
+                          r_{eFrc} = C_{0.1,1,8}(Q_{f,l}F_l + Q_{f,r}F_r).
+                        \]
+                      </p>
+                    </div>
+                  </details>
+                  <details>
+                    <summary>平滑与能耗：冲击、力矩/速度平滑、CoT<span class="chev"></span></summary>
+                    <div class="detail-body">
+                      <p style="margin-top:0">
+                        \[
+                          r_i = C_{0.1,3,0.2}\left(\frac{\lVert F_t - F_{t-1}\rVert}{mg}\right),\quad
+                          r_\tau = C_{0.1,2,160}(\lVert \tau_t - \tau_{t-1}\rVert)
+                        \]
+                        \[
+                          r_{\dot q} = C_{0.1,1,8}\left(\frac{\lVert \dot q_t - \dot q_{t-1}\rVert}{\lVert v_t\rVert}\right),\quad
+                          r_{CoT} = C_{0.1,3,1.6}\left(\frac{\tau_t\cdot \dot q_t}{mg\lVert v_t\rVert}\right)
+                        \]
+                        作者强调 CoT 作为跨平台效率指标比单纯力矩惩罚更公平（第3页式(9)-(12)）。
+                      </p>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-inner">
+            <h3>3) 显著性分析（Integrated Gradients）：把“哪个估计变量重要”写成公式</h3>
+            <div class="prose">
+              <p style="margin-top:0">
+                给定 \(N\) 个时间步输入 \(x\in\mathbb{R}^n\)，策略输出 \(F(x)\in\mathbb{R}^m\)，把输入按物理意义分成 \(\chi\) 组。
+                集成梯度（integrated gradient）定义（第3页式(13)）：
+              </p>
+              <div class="code">
+G_{x_i,t}=\sum_{j=1}^{m}\left|
+\frac{x_{i,t}-\hat x_{i,t}}{p}
+\sum_{k=1}^{p}
+\frac{\partial F_j\!\left(\frac{p-k}{p}\hat x_t+\frac{k}{p}x_t\right)}{\partial x_{i,t}}
+\right|,
+              </div>
+              <div class="prose" style="margin-top:10px">
+                之后做阈值去噪与归一化（式(14)-(16)），累计每维的重要性（式(17)），得到每组的平均重要性（式(18)-(19)）：
+                \[
+                  I_i=\sum_{t=1}^{N}S(x_{i,t}),\quad
+                  I_o=\frac{1}{h}\sum_{q=1}^{h}I_q,\quad
+                  \iota_o=\frac{I_o}{\sum_{k=1}^{\chi} I_k}.
+                \]
+                其中 \(\hat x_{i,t}\) 是 nominal 输入（通常取 0），积分步数 \(p=25\)。
+              </div>
+
+              <div class="callout" style="margin-top:12px">
+                <div class="title"><span class="badge good">方法学意义</span>这套 IG 公式可直接迁移到你的机器人项目</div>
+                <div class="prose">
+                  <p style="margin-top:0;margin-bottom:0">
+                    你不需要“相信某个估计器一定有用”，而是可以训练一个全量估计策略后，用 \(\iota_o\) 对候选估计变量做排序，
+                    再做 Key1/Key2/FullEst/IrrEst 这种组合 ablation，把“估计设计”从艺术变成可复现工程流程。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:14px">
+          <div class="figure">
+            <div class="img">
+              <div class="ph">Figure 3（第4页）：显著性饼图+箱线图占位符<br/>检索关键词：<span class="mono">Fig. 3 Saliency analysis of the estimation states</span></div>
+            </div>
+            <div class="cap">
+              <b>Fig.3 关键信息：</b>速度估计平均相对重要性约 <b>0.845</b>；脚周高度图第二；基座高度与隐式编码较小（第4页 III-B）。
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>为什么速度会“压倒性重要”？</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  作者给出直观解释：训练中最优先的任务是<strong>线速度跟踪</strong>，因此动作对速度误差最敏感；这会在 IG 中体现为速度相关通道的梯度贡献最大（第4页 III-B）。
+                </p>
+                <p style="margin-bottom:0">
+                  更值得注意的是后文的观察：在类人任务空间较“窄”的侧向（coronal）方向，策略更难抵消误差与扰动；因此如果没有显式速度估计，策略很难仅靠隐式向量“学出同等信息”（第7页）。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 实验与复现 -->
+      <section id="experiments" class="reveal">
+        <div class="section-title">
+          <h2>实验方法与实验设计：从维度定义到超参数表，按“可复现”整理</h2>
+          <div class="meta">对应论文：II-B/III（第2、4–8页）</div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="实验标签页">
+          <div class="tab active" role="tab" aria-selected="true" data-tab="tab-setup">系统设定</div>
+          <div class="tab" role="tab" aria-selected="false" data-tab="tab-groups">对比组</div>
+          <div class="tab" role="tab" aria-selected="false" data-tab="tab-metrics">指标</div>
+          <div class="tab" role="tab" aria-selected="false" data-tab="tab-repro" id="tabRepro">复现清单</div>
+        </div>
+
+        <div class="tabpanel active" id="tab-setup">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-inner">
+                <h3>平台：Wukong-IV（21 DoF）+ IsaacGym 训练</h3>
+                <div class="prose">
+                  <ul class="list">
+                    <li>机器人：<b>Wukong-IV</b>，身高 1.4m，质量 45kg，<b>21 个电机关节</b>（每腿 6DoF，每臂 4DoF）（第4页 III-A）。</li>
+                    <li>训练环境：IsaacGym；PyTorch 实现（第4页 III-A）。</li>
+                    <li>随机种子：为验证对种子不敏感，所有策略<strong>重复训练 6 次</strong>，用 CPU timestamp 作为随机种子（第4页 III-A）。</li>
+                    <li>控制：policy 100Hz 输出期望关节角，PD 1kHz 执行（第2页 II-B）。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="figure">
+              <div class="img">
+                <div class="ph">Figure 4（第4页）：Wukong-IV 实机与仿真模型占位符<br/>检索关键词：<span class="mono">Fig. 4 Wukong IV humanoid model</span></div>
+              </div>
+              <div class="cap">
+                <b>Fig.4 读图要点：</b>作者展示实机与 IsaacGym 中的动力学模型，强调“硬件-仿真一致性”是 sim-to-real 的基础。
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:14px">
+            <div class="card">
+              <div class="card-inner">
+                <h3>状态/观测/特权信息的精确定义（维度别抄错）</h3>
+                <div class="prose">
+                  <ul class="list">
+                    <li>观测（真实可得）\(O_t\in\mathbb{R}^{42}\)：重力向量、机体角速度、关节位置、关节速度、上一动作（第2页 II-B）。</li>
+                    <li>特权信息 \(P_t\in\mathbb{R}^{103}\)：机体线速度真值、机体高度、脚周小高度图、基座周大高度图等（第2页 II-B）。</li>
+                    <li>命令 \(c_t\in\mathbb{R}^{7}\)：gait signal、期望线速度、期望偏航角速度，均在机器人坐标系表达（第2页 II-B）。</li>
+                    <li>动作 \(a_t\)：期望关节位置（随后 PD 执行）（第2页 II-B）。</li>
+                  </ul>
+                  <div class="callout" style="margin-top:10px">
+                    <div class="title"><span class="badge warn">复现小坑</span>“大高度图”只在特权信息里，且不可显式估计</div>
+                    <div class="prose">
+                      <p style="margin-top:0;margin-bottom:0">
+                        文中明确说：除“基座周更大范围高度图”外，特权信息中的其它物理量都可显式估计（第2页 II-B）。
+                        这意味着：你在做估计组合时，显式估计项主要围绕速度/高度/脚周高度图展开，不要误把大高度图当成可部署估计量。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-inner">
+                <h3>训练环境设计：地形课程 + 指令随机化 + DR + 观测噪声</h3>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    训练采用 game-inspired terrain curriculum（第3页 II-D）：若 episode 里机器人走得够远，下次 spawn 到更难地形；反之失败则降级。
+                    为覆盖多命令与提升 sim-to-real，作者引入随机命令与 domain randomization，并在归一化 proprioception 上叠加随机噪声模拟传感器噪声（第4页 III 前导段）。
+                  </p>
+                  <p style="margin-bottom:0">
+                    DR 参数范围在 Appendix Table II（第7页）。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <div class="card-inner">
+              <h3>Appendix Table II（第7页）：Domain Randomization 参数（复刻）</h3>
+              <table class="table" aria-label="Randomization parameters">
+                <thead>
+                  <tr>
+                    <th style="width:38%">Parameter</th>
+                    <th>Range</th>
+                    <th class="right nowrap" style="width:16%">Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td class="strong">Base CoM position</td><td>\([-0.15,\,0.15]\)</td><td class="right">m</td></tr>
+                  <tr><td class="strong">Base load mass</td><td>\([-2.0,\,12.5]\)</td><td class="right">kg</td></tr>
+                  <tr><td class="strong">Friction rate</td><td>\([0.25,\,1.25]\)</td><td class="right">-</td></tr>
+                  <tr><td class="strong">Motor strength</td><td>\([0.8,\,1.2]\)</td><td class="right">-</td></tr>
+                  <tr><td class="strong">Kp factor</td><td>\([0.9,\,1.1]\)</td><td class="right">-</td></tr>
+                  <tr><td class="strong">Kd factor</td><td>\([0.9,\,1.1]\)</td><td class="right">-</td></tr>
+                  <tr><td class="strong">latency</td><td>\([0,\,2]\)</td><td class="right">network step</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <div class="card-inner">
+              <h3>Appendix Table III（第8页）：PPO 与网络超参数（复刻）</h3>
+              <table class="table" aria-label="PPO and network hyperparameters">
+                <thead>
+                  <tr><th>Parameter</th><th class="right nowrap">Value</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td class="strong">Number of environments</td><td class="right">4096</td></tr>
+                  <tr><td class="strong">Learning epochs</td><td class="right">4</td></tr>
+                  <tr><td class="strong">Initial learning rate</td><td class="right">\(5\times 10^{-4}\)</td></tr>
+                  <tr><td class="strong">Gamma</td><td class="right">0.996</td></tr>
+                  <tr><td class="strong">Lamda</td><td class="right">0.95</td></tr>
+                  <tr><td class="strong">Number of batches</td><td class="right">4</td></tr>
+                  <tr><td class="strong">Backbone hidden layers</td><td class="right">\([2048,\,512,\,128]\)</td></tr>
+                  <tr><td class="strong">Encoder hidden layers</td><td class="right">\([1024,\,256,\,64]\)</td></tr>
+                  <tr><td class="strong">Activation function</td><td class="right">ELU</td></tr>
+                  <tr><td class="strong">Velocity loss coefficient</td><td class="right">1</td></tr>
+                  <tr><td class="strong">Heightmap loss coefficient</td><td class="right">0.5</td></tr>
+                  <tr><td class="strong">Body height loss coefficient</td><td class="right">2</td></tr>
+                  <tr><td class="strong">VAE \(\beta\)</td><td class="right">50</td></tr>
+                  <tr><td class="strong">Prediction loss coefficient</td><td class="right">2</td></tr>
+                </tbody>
+              </table>
+
+              <div class="callout" style="margin-top:12px">
+                <div class="title"><span class="badge good">一个对比 DreamWaQ 的细节</span>这里 \(\beta=50\) 是“明写出来的”</div>
+                <div class="prose">
+                  <p style="margin-top:0;margin-bottom:0">
+                    相比一些论文把 VAE 细节写得很飘，这篇至少把 \(\beta\) 明确为 50（第8页 Table III）。如果你要复现“隐式编码 + 重构”的收益，这个数很关键。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabpanel" id="tab-groups">
+          <div class="card">
+            <div class="card-inner">
+              <h3>对比组（六组策略）：用组合 ablation 回答“估计什么最有效”</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  作者基于显著性结论（速度第一，高度图第二）构造对比组（第5页 III-C）：
+                </p>
+                <ul class="list">
+                  <li><b>EstNet</b>（EstimatorNet [37]）：encoder 只做显式估计（线速度），无隐式编码、无 decoder 重构。</li>
+                  <li><b>Key1</b>：显式估计<strong>线速度</strong> + 16 维 latent 向量（给策略自发编码空间）。</li>
+                  <li><b>Key2</b>：显式估计<strong>线速度 + 脚周高度图</strong>（最重要两项）。</li>
+                  <li><b>FullEst</b>：显式估计速度 + 脚周高度图 + 基座高度（与显著性分析用的 full estimation 一致）。</li>
+                  <li><b>IrrEst</b>：估计“最不重要显式项”基座高度 + 16 维 latent。</li>
+                  <li><b>Implicit</b>：无显式估计，仅 16 维 latent（完全隐式）。</li>
+                </ul>
+                <div class="hr"></div>
+                <p style="margin:0">
+                  这个分组其实在做两件事：<b>(i)</b> 显式速度估计是否必须；<b>(ii)</b> 高度图带来的是“地形通过性提升”还是只是噪声；<b>(iii)</b> 隐式编码到底在 sim-to-real 中补了什么。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:14px">
+            <div class="figure">
+              <div class="img">
+                <div class="ph">Figure 5（第5页）：Reward 曲线占位符<br/>检索关键词：<span class="mono">Fig. 5 Reward plots of different trials</span></div>
+              </div>
+              <div class="cap">
+                <b>Fig.5 读图要点：</b>所有组最终 reward 都收敛到约 1300，差异最多约 2.98% 且作者认为在 DR 下可忽略（第6页开头 III-E）。
+                这很关键：它说明比较组“都学会了基本行走”，差异主要来自估计设计，而不是谁没学会走路。
+              </div>
+            </div>
+
+            <div class="figure">
+              <div class="img">
+                <div class="ph">Figure 6（第5页）：仿真箱线图 + 实机速度跟踪曲线占位符<br/>检索关键词：<span class="mono">Fig. 6 Velocity tracking plots</span></div>
+              </div>
+              <div class="cap">
+                <b>Fig.6 读图要点：</b>不含显式速度估计（IrrEst/Implicit）在前向大速度命令下明显更差；EstNet 仿真很好但实机掉得多、方差更大（更脆 sim-to-real）。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabpanel" id="tab-metrics">
+          <div class="card">
+            <div class="card-inner">
+              <h3>评测指标：既看“跟踪精度”，也看“跨域鲁棒性”</h3>
+              <div class="prose">
+                <ul class="list">
+                  <li><b>收敛 reward</b>：训练最后 10 个 episode 的 mean episodic reward（第5页 III-D）。</li>
+                  <li><b>速度 RMS 误差</b>：仿真用 1024 条 10s 随机常值命令（平地）；实机用 60s 模板命令（含 ramps/slopes）重复 16 次，速度由 LiDAR 里程计测量（第5页 III-D）。最大命令速度 1.2m/s。</li>
+                  <li><b>姿态波动</b>：用重力向量偏离 nominal 的 RMS 表示 \(RMS(\Delta g)\)（第5页 III-D）。</li>
+                  <li><b>多地形通过率</b>：实机四类地形各 20 次：三阶 10cm 楼梯、25° 坡、随机 4cm 金属条障碍、自然草地（第5页 III-D）。记作 \(TSR_{stair}, TSR_{slope}, TSR_{metal}, TSR_{grass}\)。</li>
+                </ul>
+                <div class="callout" style="margin-top:10px">
+                  <div class="title"><span class="badge good">指标设计的优点</span>它把“sim-to-real 脆弱性”显式量化为方差与通过率</div>
+                  <div class="prose">
+                    <p style="margin-top:0;margin-bottom:0">
+                      许多论文只看平均误差，这里同时报告实机轨迹的覆盖范围（Fig.6B shaded area）与地形通过率（Table I），使“稳定性/鲁棒性”不再只靠视频观感。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="figure" style="margin-top:14px">
+            <div class="img">
+              <div class="ph">Figure 7（第6页）：四种地形穿越截图占位符<br/>检索关键词：<span class="mono">Fig. 7 Snapshots traversing different terrains</span></div>
+            </div>
+            <div class="cap">
+              <b>Fig.7 展示：</b>(A) 3-step 10cm stairs，(B) 25° slope，(C) 室内铝型材障碍，(D) 自然草地。作者建议看补充视频（第6页图注）。
+            </div>
+          </div>
+        </div>
+
+        <div class="tabpanel" id="tab-repro">
+          <div class="grid-2">
+            <div class="card" id="reproChecklist">
+              <div class="card-inner">
+                <h3>复现清单（按“从零到跑通”的顺序）</h3>
+                <div class="prose">
+                  <ol class="list">
+                    <li><b>仿真底座</b>：IsaacGym；导入 Wukong-IV 动力学模型（21 DoF），确保关节限位/惯量/摩擦一致。</li>
+                    <li><b>控制架构</b>：policy 100Hz 输出期望关节角；PD 1kHz 执行。</li>
+                    <li><b>观测构造</b>：\(O_t\in\mathbb{R}^{42}\)，包含重力向量、角速度、关节位置/速度、上一动作；叠加观测噪声与延迟。</li>
+                    <li><b>特权信息</b>：\(P_t\in\mathbb{R}^{103}\) 供 critic 使用，含真值速度/高度/脚周小高度图/基座周大高度图。</li>
+                    <li><b>Actor 网络</b>：Encoder \([1024,256,64]\) ELU 输出 \(z_t\) 与 \(\hat e_t\)；Decoder 重构 \(o_t\)；Backbone \([2048,512,128]\) ELU 输出动作。</li>
+                    <li><b>估计损失权重</b>：速度 1，高度图 0.5，基座高度 2；预测/重构损失系数 2；VAE \(\beta=50\)。</li>
+                    <li><b>PPO 超参</b>：4096 env；epochs=4；lr=\(5\times 10^{-4}\)；\(\gamma=0.996\)；\(\lambda=0.95\)；batches=4。</li>
+                    <li><b>DR 范围</b>：严格按 Table II（质心、载荷、摩擦、马达强度、\(K_p/K_d\) 因子、latency）。</li>
+                    <li><b>地形课程</b>：game-inspired curriculum（走得远升难，失败降难）。</li>
+                    <li><b>显著性分析</b>：训练 FullEst 后按式(13)-(19)计算 \(\iota_o\)；积分步数 \(p=25\)；nominal 输入取 0。</li>
+                    <li><b>对比组训练</b>：EstNet / Key1 / Key2 / FullEst / IrrEst / Implicit；每组训练 6 次不同种子。</li>
+                    <li><b>评测复刻</b>：仿真 1024×10s 随机常值命令；实机 60s 模板命令×16；地形通过率每类 20 次。</li>
+                  </ol>
+                </div>
+                <div class="hr"></div>
+                <div class="tiny">
+                  最常见失败点：<b>(i)</b> 观测归一化/噪声注入与真机不匹配；<b>(ii)</b> latency 建模缺失导致实机抖动；<b>(iii)</b> 高度图（脚周）分辨率/对齐不一致；
+                  <b>(iv)</b> 只盯 reward 收敛，忽略实机方差与通过率差异。
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-inner">
+                <h3>一套“最小可行复现（MVP）”路线</h3>
+                <div class="prose">
+                  <ol class="list">
+                    <li><b>MVP-0</b>：先跑 Implicit（仅 16D latent）确保能在平地跟踪基本速度命令。</li>
+                    <li><b>MVP-1</b>：上 Key1（显式速度 + 16D latent），目标是让前向大速度命令跟踪显著改善。</li>
+                    <li><b>MVP-2</b>：上 Key2（速度 + 脚周高度图），目标是地形通过率（楼梯/金属条/草地）明显提升。</li>
+                    <li><b>MVP-3</b>：补 FullEst 与 IrrEst，验证“多估计不一定更鲁棒”（论文指出 FullEst 可能对障碍过度反应）。</li>
+                    <li><b>MVP-IG</b>：对 FullEst 做 IG，复现“速度 0.845”的重要性结论。</li>
+                  </ol>
+                </div>
+
+                <div class="callout" style="margin-top:10px">
+                  <div class="title"><span class="badge warn">复现建议</span>把“估计组合”当作架构搜索问题来做</div>
+                  <div class="prose">
+                    <p style="margin-top:0;margin-bottom:0">
+                      你可以先用 IG 排名把候选集缩到前 \(k\) 个，再在这些估计项上做组合搜索（例如逐步加入/剔除），用 Table I 那样的指标做多目标选择（精度 + 方差 + 通过率）。
+                      这比凭直觉堆估计器更高效。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <div class="card-inner">
+              <h3>Table I（第6页）：性能汇总（关键数值全复刻）</h3>
+              <table class="table" aria-label="Performance summary table">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th class="right nowrap">EstNet</th>
+                    <th class="right nowrap">Key1</th>
+                    <th class="right nowrap">Key2</th>
+                    <th class="right nowrap">FullEst</th>
+                    <th class="right nowrap">IrrEst</th>
+                    <th class="right nowrap">Implicit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="strong">\(\bar r_{final}\)</td>
+                    <td class="right">1318</td><td class="right">1347</td><td class="right">1308</td><td class="right">1324</td><td class="right">1332</td><td class="right">1313</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">\(RMS(\Delta v_{sim})\)</td>
+                    <td class="right">0.2247</td><td class="right">0.2231</td><td class="right">0.2330</td><td class="right">0.2256</td><td class="right">0.3892</td><td class="right">0.4343</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">\(RMS(\Delta g_{sim})\)</td>
+                    <td class="right">0.0228</td><td class="right">0.0184</td><td class="right">0.0219</td><td class="right">0.0187</td><td class="right">0.0275</td><td class="right">0.0162</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">\(RMS(\Delta v_{real})\)</td>
+                    <td class="right">0.2396</td><td class="right">0.2671</td><td class="right strong">0.2553</td><td class="right strong">0.2270</td><td class="right">0.3945</td><td class="right">0.3919</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">\(RMS(\Delta g_{real})\)</td>
+                    <td class="right">0.0283</td><td class="right">0.0180</td><td class="right strong">0.0143</td><td class="right">0.0281</td><td class="right">0.0339</td><td class="right">0.0258</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">\(TSR_{stair}\)</td>
+                    <td class="right">0.75</td><td class="right">0.75</td><td class="right strong">0.80</td><td class="right">0.70</td><td class="right">0.10</td><td class="right">0.25</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">\(TSR_{slope}\)</td>
+                    <td class="right">0.85</td><td class="right">0.90</td><td class="right strong">0.95</td><td class="right">0.90</td><td class="right">0.80</td><td class="right">0.75</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">\(TSR_{metal}\)</td>
+                    <td class="right">0.70</td><td class="right strong">1.00</td><td class="right strong">1.00</td><td class="right strong">1.00</td><td class="right">0.50</td><td class="right">0.50</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">\(TSR_{grass}\)</td>
+                    <td class="right">0.95</td><td class="right strong">1.00</td><td class="right strong">1.00</td><td class="right">0.95</td><td class="right">0.80</td><td class="right">0.90</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="tiny" style="margin-top:10px">
+                注：作者在 III-E 解释 \(\bar r_{final}\) 差异在 DR 下不显著，因此重点看跟踪误差与地形通过率。
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 结果与洞察 -->
+      <section id="results" class="reveal">
+        <div class="section-title">
+          <h2>实验结果与核心结论：Key2 为什么赢？它赢得很“克制”</h2>
+          <div class="meta">对应论文：III-E + Fig.6 + Table I（第6–7页）</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 1：不显式估速度，前向大速度命令会明显崩</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  Fig.6(A) 显示：在 sagittal（前后）方向，IrrEst 与 Implicit 的速度跟踪误差显著更大；
+                  文中强调误差箱线图是<strong>非对称</strong>的：上侧（正误差）更大，意味着策略更难跟踪<strong>大前向速度</strong>而非后退（第7页）。
+                </p>
+                <p style="margin-bottom:0">
+                  作者的关键论断：<b>没有显式监督，策略很难把“速度信息”可靠地塞进隐式向量里</b>（第7页），这点对类人尤其致命。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 2：EstNet 在仿真好看，但实机更脆（方差更大）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  Fig.6(B) 的实机速度曲线覆盖范围显示：EstimatorNet 在真实环境下精度下降更明显，且 shaded area 更宽（方差更大），
+                  作者将其解读为更强的 sim-to-real brittleness（第7页）。
+                </p>
+                <p style="margin-bottom:0">
+                  这其实在暗示：只做“显式估速度”还不够，隐式编码与重构可能在跨域时补充了未被显式变量覆盖的信息（作者在结论也明确提到 implicit encoding 的价值）。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:14px">
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 3：Key2（速度 + 脚周高度图）鲁棒性最强</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  Table I 显示 Key2 在四类地形通过率中均为最高或并列最高：楼梯 0.80、坡地 0.95、金属障碍 1.00、草地 1.00（第6页）。
+                  作者还补充：Key2 能通过石沿与 20cm 平台等复杂环境（第7页）。
+                </p>
+                <div class="callout">
+                  <div class="title"><span class="badge good">非常关键的洞察</span>“多估计”可能导致过拟合：FullEst 反而会过度反应</div>
+                  <div class="prose">
+                    <p style="margin-top:0;margin-bottom:0">
+                      作者指出 FullEst 在面对意外障碍时更容易<strong>overreact</strong>，因此鲁棒性不如 Key2（第7页）。
+                      这点很重要：它直接挑战“估计越多越好”的朴素想法，说明估计项会改变策略的决策依赖结构，可能引入脆弱性。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 4：姿态稳定指标要小心解读（“不动”也能稳定）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  Fig.6(A) 右栏显示：implicit encoding 的策略姿态波动看起来更小；
+                  但作者指出这很可能是因为它倾向于<strong>减少运动</strong>来“保稳定”，而不是在执行高性能行走时仍稳定（第7页）。
+                </p>
+                <p style="margin-bottom:0">
+                  因此作者认为“最优稳定性”应与跟踪性能一起看，最终更好的整体方案是能显式覆盖更多状态变量的估计策略（但又不一定要全估计）。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-inner">
+            <h3>把结论翻译成一句工程准则</h3>
+            <div class="callout">
+              <div class="title"><span class="badge good">工程准则</span>先保证“速度估计”这根主轴，再用最少的地形估计补鲁棒性</div>
+              <div class="prose">
+                <p style="margin-top:0;margin-bottom:0">
+                  对这篇论文而言，“速度”是策略闭环的主坐标；脚周高度图是提高地形适应的第二主因子。
+                  其它估计项不是没用，而是在给定 reward/任务/训练分布下，边际收益低、甚至可能引入过敏反应。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 锐评 -->
+      <section id="review" class="reveal">
+        <div class="section-title">
+          <h2>我的锐评：这是篇很“对工程胃口”的论文，但也有明显的科学缺口</h2>
+          <div class="meta">以审稿人视角：贡献含金量、可复现性、可推广性</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>我认可的强项</h3>
+              <div class="prose">
+                <ul class="list">
+                  <li><b>问题选得好：</b>“估计变量选择”是实操里天天遇到的架构决策，但学术论文常用一句话带过。</li>
+                  <li><b>方法学可迁移：</b>IG 显著性分析 + 组合 ablation 的套路，可直接移植到其它机器人任务（抓取/跳跃/越障）。</li>
+                  <li><b>信息定义清楚：</b>把 \(O_t\)（42）、\(P_t\)（103）、命令（7）写明，PPO 与网络超参也在 Table III 给全，复现友好。</li>
+                  <li><b>结论“克制而有力”：</b>不是宣称“全估计最强”，而是用 Key2 证明“关键两项最划算”，并指出 FullEst 可能 overreact。</li>
+                  <li><b>实机指标扎实：</b>不仅展示视频，还给四地形通过率与重复实验（20 次/地形），且强调方差（Fig.6B shaded area）。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>我会追问的不足</h3>
+              <div class="prose">
+                <ul class="list">
+                  <li><b>“显著性→最优组合”缺少理论桥：</b>IG 给的是“对动作的敏感性”，但最优策略不等同于对动作最敏感的输入组合。作者用实验验证了 Key2 最强，但缺少更一般的解释：为什么加入基座高度会导致 overreact？它改变了什么决策依赖？</li>
+                  <li><b>高度图估计细节不够：</b>脚周小高度图的表示（分辨率/采样范围/坐标对齐/噪声模型）对结果很敏感，但本文没有展开（9 页短稿的典型遗憾）。</li>
+                  <li><b>上身/手臂动态未纳入：</b>作者在结论承认未考虑上身运动的复杂影响（第7页），而这对类人很关键：摆臂、携物会改变惯性与可观测性，可能需要额外估计。</li>
+                  <li><b>任务分布依赖性：</b>速度重要性 0.845 很可能与 reward 强调速度跟踪、以及命令分布有关。换成更强调姿态/足端落点/抗推搡的任务，排名是否会变？本文没有跨任务验证。</li>
+                  <li><b>指标仍偏“走路”单一面向：</b>缺少能量/CoT 的最终报告（虽然 reward 里有），也缺少跌倒原因分类（打滑/绊脚/估计漂移/时延）来解释 overreact 的机制。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-inner">
+            <h3>我建议作者补的“关键增强”实验（让论文更像科学，而不只是工程报告）</h3>
+            <div class="grid-3">
+              <div class="callout">
+                <div class="title"><span class="badge good">机制</span>解释 FullEst 为何 overreact</div>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    在相同障碍事件上记录 \((\hat e_t,z_t)\) 与动作的变化，做因果式 ablation：冻结某个估计通道、或注入受控噪声，看动作敏感性是否失控。
+                    给一个“过度反应”的定量定义（例如脚端加速度尖峰、关节 jerk、或策略输出熵突变）。
+                  </p>
+                </div>
+              </div>
+              <div class="callout">
+                <div class="title"><span class="badge warn">泛化</span>换任务分布再做一次 IG 排名</div>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    例如：加入强推搡、加入更大侧向速度命令、加入上身摆动或携物。
+                    看速度是否仍是 0.845 级别主导，还是重要性分布会迁移，从而证明这套流程可用于“任务自适应估计设计”。
+                  </p>
+                </div>
+              </div>
+              <div class="callout">
+                <div class="title"><span class="badge bad">可复现</span>高度图估计表示公开</div>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    给出脚周高度图的采样半径、网格尺寸、坐标系对齐方式、以及归一化/噪声模型。
+                    否则 Key2 的“第二关键变量”会变成别人很难复现的黑箱细节。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 思考题 -->
+      <section id="questions" class="reveal">
+        <div class="section-title">
+          <h2>思考题：从复述结论到提出可发表的改进</h2>
+          <div class="meta">三题递进：理解 → 分析 → 研究设计</div>
+        </div>
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-inner">
+              <h3>Q1（理解）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  为什么作者用重尾的 Cauchy 核而不是一律用 Gaussian 核？请用“远离零仍需要可学习梯度”的角度解释。
+                </p>
+                <div class="tiny">提示：比较 \(\lvert x\rvert\) 大时两类核函数的梯度行为。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>Q2（分析）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  IG 显著性给出速度的相对重要性 0.845，但为什么“重要性高”不必然意味着“加入该估计一定提升最终回报/鲁棒性”？
+                  你能提出一个反例或失败情形吗？
+                </p>
+                <div class="tiny">提示：想想“估计噪声”或“引入过敏反应”的情况。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>Q3（研究设计）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  论文承认未考虑上身/携物的惯性影响。请设计一个扩展实验：你会增加哪些可估计变量（例如质心偏移、角动量、上身姿态）？
+                  如何用 IG + 组合 ablation 找到新的 Key2？
+                </p>
+                <div class="tiny">提示：你需要同时修改命令分布与地形/扰动分布，否则排名可能不会变。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- One More Thing -->
+      <section id="more" class="reveal">
+        <div class="section-title">
+          <h2>One More Thing：把这篇论文变成你项目里的“估计模块选型手册”</h2>
+          <div class="meta">从论文结论到工程流程的落地翻译</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>你可以照搬的流程（强烈建议写进你的实验规范）</h3>
+              <div class="prose">
+                <ol class="list">
+                  <li><b>全量估计策略</b>：把你“可能想估计的变量”全塞进 \(\hat e_t\)（但保持可部署）。</li>
+                  <li><b>显著性排名</b>：用 IG 得到各估计组 \(\iota_o\)，筛掉边际贡献很低的项。</li>
+                  <li><b>组合搜索</b>：构造 Key1/Key2/FullEst/IrrEst/Implicit 的对照，统一训练预算与 DR。</li>
+                  <li><b>多目标选型</b>：不要只看 reward，看实机方差、跟踪误差、通过率、以及失败原因分布。</li>
+                  <li><b>反事实验证</b>：对最关键估计通道注入受控噪声/延迟，验证策略依赖是否健康（避免“估计过敏”）。</li>
+                </ol>
+                <p style="margin-bottom:0">
+                  这套流程的价值在于：它把“估计器设计”变成标准化实验，而不是凭经验堆模块。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>一个我认为更“高级”的扩展方向：Key Estimation 的动态门控</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  论文的 Key2 是静态组合。但现实里，估计质量随场景变化：例如草地的高度图估计可能更噪，室内台阶更可靠。
+                  我会建议加入一个低维的“估计可信度”门控 \(g_t\in[0,1]\)，让策略在运行时动态调节对某些估计通道的依赖：
+                  \[
+                    a_t=\psi\big(o_t, z_t, g_t\odot \hat e_t\big).
+                  \]
+                </p>
+                <p style="margin-bottom:0">
+                  门控可以用自监督一致性（重构误差、预测误差、或者时序平滑度）来学习，不需要额外传感器。
+                  这能把“Key2 最优”推广为“Key2 是默认，但可按置信度退化到 Key1/Implicit”，在真实系统里更稳。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-inner">
+            <h3>快速复盘卡片</h3>
+            <div class="grid-3">
+              <div class="callout">
+                <div class="title"><span class="badge good">记住</span>速度估计是类人行走的主轴</div>
+                <div class="prose">
+                  <p style="margin-top:0;margin-bottom:0">
+                    这篇论文里速度相对重要性 0.845，且缺失速度显式估计会显著伤害前向高速命令跟踪。
+                  </p>
+                </div>
+              </div>
+              <div class="callout">
+                <div class="title"><span class="badge good">记住</span>高度图带来的是地形通过率</div>
+                <div class="prose">
+                  <p style="margin-top:0;margin-bottom:0">
+                    Key2 加入脚周高度图后在楼梯/坡地/金属条/草地通过率全面更高，是“第二关键因子”。
+                  </p>
+                </div>
+              </div>
+              <div class="callout">
+                <div class="title"><span class="badge warn">警惕</span>FullEst 可能引入过度反应</div>
+                <div class="prose">
+                  <p style="margin-top:0;margin-bottom:0">
+                    多估计未必更鲁棒；额外通道可能改变决策依赖，导致对意外障碍过敏（作者明确指出 FullEst overreact）。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="footer">
+        <div class="row">
+          <div>
+            <div class="tiny">
+              资料来源：<span class="mono">Toward Understanding Key Estimation in Learning Robust Humanoid Locomotion</span>（arXiv:2403.05868v1）<br/>
+              本页面为“信息设计式”深度解读：覆盖研究动机、数学建模、实验可复现细节、核心结果与评审观点。
+            </div>
+          </div>
+          <div class="tiny">
+            快捷键：<span class="kbd">/</span> 页面内搜索 · <span class="kbd">g</span><span class="kbd">m</span> 跳动机 · <span class="kbd">g</span><span class="kbd">r</span> 跳复现
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    // Smooth reveal on scroll
+    const revealEls = Array.from(document.querySelectorAll('.reveal'));
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(e=>{
+        if(e.isIntersecting){ e.target.classList.add('show'); }
+      });
+    }, { threshold: 0.12 });
+    revealEls.forEach(el=>io.observe(el));
+
+    // Navigation jump
+    const pills = Array.from(document.querySelectorAll('.pill[data-jump]'));
+    function setActiveByHash(hash){
+      pills.forEach(p=>p.classList.toggle('active', p.getAttribute('data-jump')===hash));
+    }
+    pills.forEach(p=>{
+      p.addEventListener('click', ()=>{
+        const target = p.getAttribute('data-jump');
+        const el = document.querySelector(target);
+        if(el){
+          el.scrollIntoView({behavior:'smooth', block:'start'});
+          history.replaceState(null,'',target);
+          setActiveByHash(target);
+        }
+      });
+    });
+
+    // Observe section to highlight nav
+    const sections = ['#motivation','#method','#math','#experiments','#results','#review','#questions','#more']
+      .map(id=>document.querySelector(id)).filter(Boolean);
+    const sectionObserver = new IntersectionObserver((entries)=>{
+      const vis = entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+      if(vis){ setActiveByHash('#'+vis.target.id); }
+    }, { threshold: [0.18, 0.28, 0.38, 0.5] });
+    sections.forEach(s=>sectionObserver.observe(s));
+
+    // Tabs
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    const panels = Array.from(document.querySelectorAll('.tabpanel'));
+    tabs.forEach(t=>{
+      t.addEventListener('click', ()=>{
+        const id = t.getAttribute('data-tab');
+        tabs.forEach(x=>x.classList.toggle('active', x===t));
+        tabs.forEach(x=>x.setAttribute('aria-selected', x===t ? 'true':'false'));
+        panels.forEach(p=>p.classList.toggle('active', p.id===id));
+        setTimeout(()=>renderMath(), 0);
+      });
+    });
+
+    // KaTeX rendering
+    function renderMath(){
+      if(!window.renderMathInElement) return;
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "\\[", right: "\\]", display: true},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "$", right: "$", display: false}
+        ],
+        throwOnError: false,
+        strict: "ignore"
+      });
+    }
+    document.addEventListener('DOMContentLoaded', ()=>{ renderMath(); });
+
+    // Toast helper
+    const toast = document.getElementById('toast');
+    let toastTimer = null;
+    function showToast(msg){
+      if(!toast) return;
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(()=>{ toast.style.display='none'; }, 2200);
+    }
+
+    // Buttons
+    document.getElementById('btnJumpRepro')?.addEventListener('click', ()=>{
+      document.querySelector('#experiments')?.scrollIntoView({behavior:'smooth', block:'start'});
+      setTimeout(()=>{
+        document.querySelector('[data-tab="tab-repro"]')?.click();
+        document.querySelector('#reproChecklist')?.scrollIntoView({behavior:'smooth', block:'start'});
+      }, 420);
+    });
+
+    document.getElementById('btnCopyBib')?.addEventListener('click', async ()=>{
+      const bib = `@article{wang2024keyestimation,
+  title={Toward Understanding Key Estimation in Learning Robust Humanoid Locomotion},
+  author={Wang, Zhicheng and Wei, Wandi and Yu, Ruiqi and Wu, Jun and Zhu, Qiuguo},
+  journal={arXiv preprint arXiv:2403.05868},
+  year={2024}
+}`;
+      try{
+        await navigator.clipboard.writeText(bib);
+        showToast('已复制 BibTeX（占位条目，可按需要补充会议/版本信息）。');
+      }catch(e){
+        showToast('复制失败：浏览器阻止了剪贴板访问。你可以手动复制。');
+      }
+    });
+
+    document.getElementById('btnToggleMath')?.addEventListener('click', ()=>{
+      renderMath();
+      showToast('已重新渲染 LaTeX。');
+    });
+
+    // Simple keyboard shortcuts
+    document.addEventListener('keydown', (e)=>{
+      const key = e.key.toLowerCase();
+      if(key === '/'){
+        e.preventDefault();
+        const q = prompt('页面内搜索（输入关键词）：');
+        if(!q) return;
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let node, found = null;
+        const needle = q.trim().toLowerCase();
+        while((node = walker.nextNode())){
+          if(node.nodeValue && node.nodeValue.toLowerCase().includes(needle)){
+            found = node.parentElement;
+            break;
+          }
+        }
+        if(found){
+          found.scrollIntoView({behavior:'smooth', block:'center'});
+          showToast('已定位到第一个匹配项。可再次按 / 继续搜索。');
+        }else{
+          showToast('未找到匹配项。');
+        }
+      }
+      if(key === 'g'){
+        const handler = (ev)=>{
+          const k2 = ev.key.toLowerCase();
+          if(k2 === 'm'){ document.querySelector('#motivation')?.scrollIntoView({behavior:'smooth'}); }
+          if(k2 === 'r'){
+            document.querySelector('#experiments')?.scrollIntoView({behavior:'smooth'});
+            setTimeout(()=>{ document.querySelector('[data-tab="tab-repro"]')?.click(); }, 360);
+          }
+          document.removeEventListener('keydown', handler);
+        };
+        document.addEventListener('keydown', handler);
+      }
+    });
+  </script>
+
+  :contentReference[oaicite:0]{index=0}
+</body>
+</html>

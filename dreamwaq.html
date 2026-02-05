@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DreamWaQ 论文深度解读｜隐式地形想象的四足鲁棒行走</title>
+  <meta name="description" content="DreamWaQ: Learning Robust Quadrupedal Locomotion With Implicit Terrain Imagination via Deep Reinforcement Learning — 中文深度解读与复现级实验整理" />
+  <meta name="color-scheme" content="light dark" />
+  <style>
+    :root{
+      --bg: #0b0c10;
+      --bg2:#0f1117;
+      --card:#121524;
+      --card2:#14182a;
+      --text:#e9ecf1;
+      --muted:#a8b0c2;
+      --faint:#6e7892;
+      --line: rgba(255,255,255,.08);
+      --line2: rgba(255,255,255,.12);
+      --accent:#7cd4ff;
+      --accent2:#a78bfa;
+      --good:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+      --shadow2: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 22px;
+      --radius2: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+              Arial, "Apple Color Emoji","Segoe UI Emoji";
+      --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+      --max: 1160px;
+      --blur: blur(14px);
+    }
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f6f7fb;
+        --bg2:#ffffff;
+        --card:#ffffff;
+        --card2:#fbfcff;
+        --text:#0b1220;
+        --muted:#3a4762;
+        --faint:#6a7896;
+        --line: rgba(12,18,32,.08);
+        --line2: rgba(12,18,32,.12);
+        --shadow: 0 18px 60px rgba(12,18,32,.12);
+        --shadow2: 0 10px 30px rgba(12,18,32,.10);
+      }
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background:
+        radial-gradient(1400px 900px at 20% -10%, rgba(124,212,255,.25), transparent 55%),
+        radial-gradient(1200px 900px at 90% 0%, rgba(167,139,250,.22), transparent 52%),
+        radial-gradient(1100px 800px at 50% 120%, rgba(52,211,153,.12), transparent 60%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
+      color:var(--text);
+      overflow-x:hidden;
+    }
+    a{ color:inherit; text-decoration:none; }
+    .container{ width:min(var(--max), calc(100% - 42px)); margin:0 auto; }
+    .topbar{
+      position:sticky; top:0; z-index:50;
+      background: rgba(10,12,16,.42);
+      border-bottom:1px solid var(--line);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+    }
+    @media (prefers-color-scheme: light){
+      .topbar{ background: rgba(255,255,255,.65); }
+    }
+    .topbar-inner{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 0;
+      gap:14px;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      user-select:none;
+    }
+    .logo{
+      width:34px; height:34px; border-radius:12px;
+      background:
+        radial-gradient(14px 14px at 30% 30%, rgba(124,212,255,.9), transparent 55%),
+        radial-gradient(18px 18px at 75% 35%, rgba(167,139,250,.85), transparent 60%),
+        radial-gradient(20px 20px at 60% 80%, rgba(52,211,153,.55), transparent 62%),
+        linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.06));
+      border:1px solid var(--line2);
+      box-shadow: var(--shadow2);
+    }
+    .brand h1{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.2px;
+      font-weight:650;
+    }
+    .brand .sub{
+      font-size:12px;
+      color:var(--faint);
+      margin-top:1px;
+    }
+
+    .nav{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .pill{
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--muted);
+      font-size:12px;
+      transition: transform .18s ease, background .18s ease, border-color .18s ease;
+      cursor:pointer;
+      user-select:none;
+    }
+    @media (prefers-color-scheme: light){
+      .pill{ background: rgba(12,18,32,.04); }
+    }
+    .pill:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); border-color: var(--line2); }
+    .pill.active{
+      color:var(--text);
+      border-color: rgba(124,212,255,.45);
+      background: linear-gradient(180deg, rgba(124,212,255,.20), rgba(255,255,255,.06));
+    }
+    .pill .dot{
+      display:inline-block;
+      width:7px; height:7px; border-radius:99px;
+      margin-right:7px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(124,212,255,.12);
+      vertical-align:middle;
+    }
+
+    header.hero{
+      padding:54px 0 28px;
+      position:relative;
+    }
+    .hero-grid{
+      display:grid;
+      grid-template-columns: 1.25fr .85fr;
+      gap:18px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .hero-grid{ grid-template-columns: 1fr; }
+    }
+    .hero h2{
+      font-size: clamp(28px, 3.6vw, 44px);
+      line-height:1.08;
+      letter-spacing:-.7px;
+      margin:0 0 12px;
+      font-weight:760;
+    }
+    .hero p{
+      margin:0 0 18px;
+      color:var(--muted);
+      font-size: 15.5px;
+      line-height:1.65;
+      max-width: 70ch;
+    }
+    .chips{
+      display:flex; flex-wrap:wrap; gap:10px;
+      margin-top: 12px;
+    }
+    .chip{
+      border-radius:999px;
+      padding:9px 11px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      font-size:12px;
+      color:var(--muted);
+      display:flex; align-items:center; gap:8px;
+    }
+    .chip b{ color:var(--text); font-weight:650; }
+    .chip .tag{
+      font-family:var(--mono);
+      font-size:11px;
+      color:rgba(124,212,255,.9);
+      background: rgba(124,212,255,.10);
+      border:1px solid rgba(124,212,255,.20);
+      padding:3px 6px;
+      border-radius:999px;
+    }
+    .card{
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      border:1px solid var(--line);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      position:relative;
+    }
+    @media (prefers-color-scheme: light){
+      .card{ background: linear-gradient(180deg, rgba(255,255,255,1), rgba(250,252,255,1)); }
+    }
+    .card-inner{ padding:18px; }
+    .card h3{
+      margin:0 0 10px;
+      font-size:14px;
+      letter-spacing:.2px;
+      font-weight:700;
+      color:var(--text);
+    }
+    .kpi{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap:10px;
+    }
+    .kpi .box{
+      border:1px solid var(--line);
+      border-radius: 16px;
+      padding:12px 12px 10px;
+      background: rgba(255,255,255,.05);
+      position:relative;
+      overflow:hidden;
+    }
+    .kpi .box:before{
+      content:"";
+      position:absolute; inset:-80px -120px auto auto;
+      width:200px; height:200px;
+      background: radial-gradient(circle at 30% 30%, rgba(124,212,255,.22), transparent 62%);
+      transform: rotate(18deg);
+      pointer-events:none;
+    }
+    .kpi .label{
+      font-size:11px;
+      color:var(--faint);
+      margin-bottom:6px;
+    }
+    .kpi .value{
+      font-size:18px;
+      letter-spacing:-.2px;
+      font-weight:750;
+    }
+    .kpi .hint{
+      margin-top:6px;
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .cta-row{
+      display:flex; gap:10px; flex-wrap:wrap;
+      margin-top:12px;
+    }
+    .btn{
+      border-radius:999px;
+      padding:10px 12px;
+      border:1px solid var(--line2);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      font-size:12px;
+      font-weight:650;
+      cursor:pointer;
+      transition: transform .18s ease, background .18s ease, border-color .18s ease;
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); }
+    .btn.primary{
+      border-color: rgba(124,212,255,.55);
+      background: linear-gradient(180deg, rgba(124,212,255,.20), rgba(255,255,255,.06));
+    }
+    .btn .ic{
+      width:16px; height:16px; display:inline-block;
+      border-radius:5px;
+      background: radial-gradient(circle at 35% 35%, rgba(255,255,255,.85), rgba(255,255,255,.2));
+      border:1px solid rgba(255,255,255,.22);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.05);
+    }
+
+    main{ padding: 10px 0 70px; }
+    section{
+      padding: 20px 0;
+      scroll-margin-top: 86px;
+    }
+    .section-title{
+      display:flex; align-items:baseline; justify-content:space-between;
+      gap:12px;
+      margin: 8px 0 14px;
+    }
+    .section-title h2{
+      margin:0;
+      font-size: 18px;
+      letter-spacing:-.2px;
+      font-weight: 780;
+    }
+    .section-title .meta{
+      color:var(--faint);
+      font-size:12px;
+      line-height:1.35;
+      text-align:right;
+    }
+    .grid-2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+    }
+    @media (max-width: 920px){ .grid-2{ grid-template-columns:1fr; } }
+    .grid-3{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:14px;
+    }
+    @media (max-width: 980px){ .grid-3{ grid-template-columns:1fr; } }
+
+    .prose{
+      color:var(--muted);
+      font-size: 14.5px;
+      line-height: 1.78;
+    }
+    .prose b{ color:var(--text); }
+    .prose em{ color: rgba(124,212,255,.95); font-style:normal; }
+    .hr{
+      height:1px; background: var(--line);
+      margin: 16px 0;
+    }
+    .callout{
+      border-radius: var(--radius);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+      padding: 14px 14px 12px;
+      position:relative;
+      overflow:hidden;
+    }
+    .callout:before{
+      content:"";
+      position:absolute; inset:-140px -180px auto auto;
+      width:320px; height:320px;
+      background:
+        radial-gradient(circle at 30% 35%, rgba(167,139,250,.20), transparent 60%),
+        radial-gradient(circle at 75% 55%, rgba(124,212,255,.18), transparent 62%);
+      transform: rotate(8deg);
+      pointer-events:none;
+    }
+    .callout .title{
+      display:flex; align-items:center; gap:10px;
+      margin-bottom: 8px;
+      color:var(--text);
+      font-weight:760;
+      letter-spacing:-.2px;
+    }
+    .badge{
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--line2);
+      color: var(--muted);
+      background: rgba(255,255,255,.06);
+    }
+    .badge.good{ border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.10); color: rgba(52,211,153,.95); }
+    .badge.warn{ border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.10); color: rgba(251,191,36,.95); }
+    .badge.bad { border-color: rgba(251,113,133,.35); background: rgba(251,113,133,.10); color: rgba(251,113,133,.95); }
+
+    .tabs{
+      display:flex; gap:8px; flex-wrap:wrap;
+      margin-bottom: 12px;
+    }
+    .tab{
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+      color:var(--muted);
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .tab.active{
+      border-color: rgba(124,212,255,.45);
+      color:var(--text);
+      background: linear-gradient(180deg, rgba(124,212,255,.20), rgba(255,255,255,.06));
+    }
+    .tabpanel{ display:none; }
+    .tabpanel.active{ display:block; }
+
+    .list{
+      margin:10px 0 0;
+      padding-left: 18px;
+      color:var(--muted);
+    }
+    .list li{ margin: 7px 0; }
+    .mono{
+      font-family: var(--mono);
+      font-size: 12.2px;
+      color: rgba(124,212,255,.92);
+    }
+
+    .code{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(233,236,241,.92);
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px 12px;
+      overflow:auto;
+      line-height:1.55;
+    }
+    @media (prefers-color-scheme: light){
+      .code{ background: rgba(12,18,32,.04); }
+    }
+
+    .table{
+      width:100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow:hidden;
+      border:1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,.04);
+    }
+    .table th, .table td{
+      padding: 10px 10px;
+      border-bottom:1px solid var(--line);
+      color:var(--muted);
+      font-size: 12.8px;
+      line-height:1.45;
+      vertical-align:top;
+    }
+    .table th{
+      text-align:left;
+      color:var(--text);
+      font-weight: 730;
+      background: rgba(255,255,255,.06);
+    }
+    .table tr:last-child td{ border-bottom:none; }
+    .table .right{ text-align:right; }
+    .table .nowrap{ white-space:nowrap; }
+    .table .strong{ color:var(--text); font-weight:700; }
+
+    .figure{
+      border-radius: var(--radius);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      overflow:hidden;
+    }
+    .figure .img{
+      aspect-ratio: 16 / 9;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02)),
+        radial-gradient(600px 240px at 20% 20%, rgba(124,212,255,.18), transparent 55%),
+        radial-gradient(500px 280px at 80% 30%, rgba(167,139,250,.18), transparent 58%),
+        radial-gradient(520px 320px at 60% 90%, rgba(52,211,153,.10), transparent 58%);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 14px;
+      position:relative;
+    }
+    .figure .img .ph{
+      border:1px dashed rgba(255,255,255,.25);
+      color: rgba(233,236,241,.72);
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      max-width: 92%;
+      text-align:center;
+      backdrop-filter: blur(8px);
+      background: rgba(0,0,0,.15);
+    }
+    @media (prefers-color-scheme: light){
+      .figure .img .ph{
+        border-color: rgba(12,18,32,.22);
+        background: rgba(255,255,255,.55);
+        color: rgba(12,18,32,.70);
+      }
+    }
+    .figure .cap{
+      padding: 12px 14px;
+      border-top:1px solid var(--line);
+      color:var(--muted);
+      font-size:12.6px;
+      line-height:1.55;
+    }
+    .figure .cap b{ color:var(--text); }
+    .accordion{
+      border-radius: var(--radius);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      overflow:hidden;
+    }
+    details{
+      border-top:1px solid var(--line);
+    }
+    details:first-child{ border-top:none; }
+    summary{
+      list-style:none;
+      padding: 13px 14px;
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px;
+      color:var(--text);
+      font-weight:720;
+      font-size: 13px;
+      user-select:none;
+    }
+    summary::-webkit-details-marker{ display:none; }
+    .chev{
+      width:10px; height:10px;
+      border-right:2px solid var(--muted);
+      border-bottom:2px solid var(--muted);
+      transform: rotate(-45deg);
+      transition: transform .18s ease;
+      flex:0 0 auto;
+      margin-left: 8px;
+    }
+    details[open] .chev{ transform: rotate(45deg); }
+    .detail-body{
+      padding: 0 14px 14px;
+      color: var(--muted);
+      font-size: 13.8px;
+      line-height: 1.75;
+    }
+    .footer{
+      padding: 28px 0 46px;
+      color:var(--faint);
+      font-size:12px;
+      border-top: 1px solid var(--line);
+      margin-top: 30px;
+    }
+    .footer .row{
+      display:flex;
+      gap:12px;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      align-items:flex-end;
+    }
+    .tiny{
+      font-size:11px; color:var(--faint);
+      line-height:1.55;
+    }
+    .kbd{
+      font-family:var(--mono);
+      font-size:11px;
+      border:1px solid var(--line);
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.05);
+      color:var(--muted);
+    }
+
+    /* Smooth reveal */
+    .reveal{
+      opacity:0;
+      transform: translateY(10px);
+      transition: opacity .55s ease, transform .55s ease;
+    }
+    .reveal.show{
+      opacity:1;
+      transform: translateY(0);
+    }
+
+    /* Inline SVG diagram styles */
+    .diagram{
+      width:100%;
+      height:auto;
+      display:block;
+      background: rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      overflow:hidden;
+    }
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:22px;
+      transform: translateX(-50%);
+      background: rgba(10,12,16,.72);
+      border:1px solid var(--line2);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      box-shadow: var(--shadow2);
+      backdrop-filter: var(--blur);
+      display:none;
+      z-index:60;
+      max-width:min(520px, calc(100% - 34px));
+      text-align:center;
+    }
+    @media (prefers-color-scheme: light){
+      .toast{ background: rgba(255,255,255,.72); }
+    }
+  </style>
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Subtle Apple-like typography smoothing -->
+  <style>
+    body{ -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    ::selection{ background: rgba(124,212,255,.25); }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="container">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <h1>DreamWaQ 深度解读</h1>
+            <div class="sub">只用本体感觉，实现“隐式地形想象”的鲁棒四足行走</div>
+          </div>
+        </div>
+        <div class="nav" aria-label="导航">
+          <div class="pill active" data-jump="#motivation"><span class="dot"></span>动机</div>
+          <div class="pill" data-jump="#method">方法</div>
+          <div class="pill" data-jump="#math">数学建模</div>
+          <div class="pill" data-jump="#experiments">实验&复现</div>
+          <div class="pill" data-jump="#results">结果&洞察</div>
+          <div class="pill" data-jump="#review">锐评</div>
+          <div class="pill" data-jump="#questions">思考题</div>
+          <div class="pill" data-jump="#more">One More Thing</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <header class="hero">
+    <div class="container">
+      <div class="hero-grid">
+        <div class="reveal">
+          <h2>DreamWaQ：<span style="color:rgba(124,212,255,.95)">不看地形</span>也能走远、走稳、走复杂</h2>
+          <p>
+            这篇工作提出 <b>Dream Walking for Quadrupedal Robots (DreamWaQ)</b>：在训练时让 <em>critic 看全世界</em>（含高度图/扰动等特权信息），但让 <em>actor 只看本体感觉</em>（IMU + 关节编码器 + 历史动作），
+            依靠 <b>不对称 actor-critic</b> 的“价值引导”机制，逼迫策略学会从时间序列的 proprioception 中 <b>隐式推断地形属性</b>（高度图、摩擦、回弹、障碍等），并配合一个 <b>Context-aided Estimator Network (CENet)</b> 同步估计机体速度与环境潜变量。
+            最终在 Unitree A1 上实现 <b>零样本 sim-to-real</b>，在真实户外课程中 <b>单次长距离 430–465m</b> 穿越坡地、草地、泥地、台阶与湿滑路面（论文第6页课程描述）。
+          </p>
+
+          <div class="chips" aria-label="关键词">
+            <div class="chip"><span class="tag">POMDP</span><b>部分可观测</b>：只用 proprioception</div>
+            <div class="chip"><span class="tag">Asym-AC</span><b>不对称 Actor-Critic</b>：critic 特权观测</div>
+            <div class="chip"><span class="tag">CENet</span><b>共享编码器</b>：速度估计 + β-VAE</div>
+            <div class="chip"><span class="tag">AdaBoot</span><b>自适应 bootstrap</b>：用奖励 CV 控制</div>
+            <div class="chip"><span class="tag">PPO</span><b>主算法</b>：单阶段训练更高效</div>
+          </div>
+        </div>
+
+        <div class="card reveal">
+          <div class="card-inner">
+            <h3>一眼读懂这篇论文</h3>
+            <div class="kpi">
+              <div class="box">
+                <div class="label">核心承诺</div>
+                <div class="value">无需外感知</div>
+                <div class="hint">仅 IMU + 编码器 + 历史序列，仍可走台阶/坡地（第6页）</div>
+              </div>
+              <div class="box">
+                <div class="label">关键技巧</div>
+                <div class="value">“让 critic 看地形”</div>
+                <div class="hint">actor 被迫学会“想象”高度图与扰动（第2页 Fig.1）</div>
+              </div>
+              <div class="box">
+                <div class="label">长期可靠性</div>
+                <div class="value">加入功率分布惩罚</div>
+                <div class="hint">减少某些电机先过热（第3页 Table I）</div>
+              </div>
+              <div class="box">
+                <div class="label">真实世界验证</div>
+                <div class="value">RTK-GPS 轨迹</div>
+                <div class="hint">课程 A 430m + 课程 B 465m（第5–6页）</div>
+              </div>
+            </div>
+
+            <div class="cta-row" style="margin-top:14px">
+              <button class="btn primary" id="btnJumpRepro">
+                <span class="ic" aria-hidden="true"></span>直接跳到「复现清单」
+              </button>
+              <button class="btn" id="btnCopyBib">
+                <span class="ic" aria-hidden="true"></span>复制 BibTeX（占位）
+              </button>
+              <button class="btn" id="btnToggleMath">
+                <span class="ic" aria-hidden="true"></span>重渲染 LaTeX
+              </button>
+            </div>
+
+            <div class="hr"></div>
+            <div class="tiny">
+              论文：<span class="mono">DreamWaQ: Learning Robust Quadrupedal Locomotion With Implicit Terrain Imagination via Deep Reinforcement Learning</span>（arXiv:2301.10602v2）
+              <br/>提示：本文页内所有公式支持 LaTeX 渲染（包含行内公式）。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+
+      <!-- 研究动机 -->
+      <section id="motivation" class="reveal">
+        <div class="section-title">
+          <h2>研究动机：为什么“只靠本体感觉”仍值得做</h2>
+          <div class="meta">对应论文：引言（第1页） + 贡献点（第2页）</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>问题画像</h3>
+              <div class="prose">
+                <p>
+                  四足机器人能像动物一样穿越非结构化地形，但传统 <b>模型驱动控制</b> 需要复杂流水线（状态估计、轨迹/步态优化、执行器控制等），且高度依赖准确建模与调参，线性化模型还会限制性能上限（第1页）。
+                </p>
+                <p>
+                  近年来 RL 训练的 <b>感知行走（perceptive locomotion）</b> 多用相机/LiDAR 观察地形并规划落足，但作者指出：外感知在真实场景并不可靠——
+                  相机受光照/天气影响；LiDAR 能分割地面却难以估计 <em>物理属性</em>（例如雪“看起来像硬地”但实际松软；高草“看起来不可走”但腿式可穿越）（第1页）。
+                </p>
+                <p>
+                  本体感觉（IMU/编码器）更轻、更鲁棒，但“仅 proprioception”的方法通常在挑战地形与长距离持续运行上缺乏充分展示，且存在 <b>表示学习瓶颈</b>：
+                  策略要想学会鲁棒行为需要理解地形；但要学地形表示又需要策略能在地形中探索广泛状态（第1页末到第2页开头）。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>DreamWaQ 的切入点（一句话）</h3>
+              <div class="callout">
+                <div class="title">
+                  <span class="badge good">核心想法</span>
+                  用不对称 actor-critic 把“地形理解”塞进策略的隐变量里
+                </div>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    训练时让 <b>critic</b> 拿到特权信息（高度图 \(h_t\)、扰动 \(d_t\) 等），并通过优势函数/价值回传塑形；而 <b>actor</b> 只看到时间窗口内的 proprioception \(o_t^H\)。
+                    由于 critic 的“知道地形”能更精准评估回报，actor 为了拿到更高回报，必须从 proprioception 序列中 <b>隐式推断</b> 那些它看不到的因素——
+                    这就是作者所谓的 <em>implicit terrain imagination</em>（第2页 Fig.1 + II-B）。
+                  </p>
+                  <p style="margin-bottom:0">
+                    与“teacher-student + BC”不同，这里是 <b>单阶段 RL 训练</b>：更数据高效、允许 actor 自己探索失败状态，从而提升鲁棒性（第2页 II-B）。
+                  </p>
+                </div>
+              </div>
+
+              <div class="hr"></div>
+              <div class="prose">
+                <p style="margin:0">
+                  论文声称的三点贡献（第2页）：
+                </p>
+                <ol class="list">
+                  <li><b>不对称 actor-critic</b> 学习“隐式想象”地形属性，仅用 proprioception。</li>
+                  <li><b>CENet</b>：联合估计机体速度与环境上下文潜变量，结构更简、性能优于现有学习法。</li>
+                  <li><b>真实世界长距离鲁棒性评估</b>：Unitree A1 在多样户外条件下单次长距离运行（作者强调“首次可持续走 hills/yards”）。</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 方法总览 -->
+      <section id="method" class="reveal">
+        <div class="section-title">
+          <h2>方法总览：三块积木拼成“会做梦的腿”</h2>
+          <div class="meta">对应论文：Fig.1（第1页） + II-B/II-C（第2–4页）</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="figure">
+            <div class="img">
+              <div class="ph">Figure 1（论文第1页）：DreamWaQ 总览占位符<br/>建议检索关键词：<span class="mono">Fig. 1 Overview of DreamWaQ</span></div>
+            </div>
+            <div class="cap">
+              <b>Fig.1 逻辑解读：</b> actor 输入 \(o_t^H\)（时间窗口内的部分观测），通过 CENet 得到 \(\hat v_t\) 与 \(z_t\)；critic 输入特权状态 \(s_t\)（含高度图 \(h_t\) 与扰动 \(d_t\)）。
+              训练在仿真中完成，部署时 actor + CENet 以 50Hz 同步运行（第4页 C 节）。
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>DreamWaQ = ①不对称 AC + ②CENet + ③AdaBoot</h3>
+              <div class="accordion">
+                <details open>
+                  <summary>① 不对称 Actor-Critic：critic 见全局，actor 见局部<span class="chev" aria-hidden="true"></span></summary>
+                  <div class="detail-body">
+                    <p style="margin-top:0">
+                      关键不是“把地形编码器显式塞进策略”，而是利用 actor-critic 的相互作用：
+                      critic 由于拥有 \(h_t,d_t\) 能产生更准确的价值/优势估计，从而把“地形造成的回报差异”以梯度形式回传给 actor。
+                      actor 只能通过 \(o_t^H\) 解释这些差异，于是被迫在内部形成 <b>可用于控制的地形表征</b>（II-B）。
+                    </p>
+                    <p style="margin-bottom:0">
+                      相比 teacher-student + BC：这里避免了“学生性能被老师上界”与“只学好动作、缺少失败状态”两类问题（第2页 II-B）。
+                    </p>
+                  </div>
+                </details>
+
+                <details>
+                  <summary>② CENet：共享编码器，既估速度也学环境潜变量<span class="chev" aria-hidden="true"></span></summary>
+                  <div class="detail-body">
+                    <p style="margin-top:0">
+                      policy 需要 \(\hat v_t\) 与 \(z_t\) 作为输入（第2页 II-B.1）。CENet 用一个共享 encoder 把 \(o_t^H\) 编码成两类输出：
+                      <b>速度估计 head</b> 输出 \(\tilde v_t\)；<b>β-VAE head</b> 重构下一时刻观测 \(\tilde o_{t+1}\)，同时以 KL 约束让 \(z_t\) 形成结构化潜变量（第3页 Fig.2 + 式(5)-(7)）。
+                    </p>
+                    <p style="margin-bottom:0">
+                      作者强调“地形与状态估计相互促进”：当机器人在台阶上绊脚时，显式速度估计更容易失真；但 CENet 因为同时学习环境潜变量与前后向动力学，估计更稳（第5页 Fig.5 及解释）。
+                    </p>
+                  </div>
+                </details>
+
+                <details>
+                  <summary>③ AdaBoot：训练早期别乱引导，后期再逐步 bootstrap<span class="chev" aria-hidden="true"></span></summary>
+                  <div class="detail-body">
+                    <p style="margin-top:0">
+                      训练中“用估计器输出去 bootstrap policy”能提升 sim-to-real 鲁棒性，但早期估计噪声大，会伤害策略学习。
+                      作者用 <b>奖励的变异系数</b> \(CV(R)=\sigma(R)/\mu(R)\) 控制 bootstrap 概率：
+                      \[
+                        p_{\text{boot}} = 1 - \tanh(CV(R)).
+                      \]
+                      当多个 domain-randomized 环境的 episodic reward 差异小（CV 小）时，说明策略已较稳定，此时更需要抵抗估计误差，bootstrap 概率变大；
+                      当 CV 大（尚未学好）时，bootstrap 概率下降（第4页 式(8)）。
+                    </p>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-3" style="margin-top:14px">
+          <div class="card">
+            <div class="card-inner">
+              <h3>你可以把它当成什么？</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  一个实用的心智模型：DreamWaQ 在训练中让 critic 提供“带地形知识的评语”，actor 则用 proprioception 去猜“为什么我这一步回报低”，
+                  从而形成“能解释回报差异的内部特征”。这类特征未必可解释成显式高度图，但足以驱动控制。
+                </p>
+                <p style="margin-bottom:0">
+                  换句话说：<b>不需要把地形估计做得像 SLAM 那样显式</b>，只要能让控制策略“用得上”。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>它到底“想象”了什么？</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  论文明确写到策略要隐式推断 \(h_t\)（高度图扫描）与 \(d_t\)（随机扰动），以及更一般的摩擦/回弹/障碍等属性（第2页摘要与 II-B.2）。
+                </p>
+                <p style="margin-bottom:0">
+                  注意：这里“想象”并非生成像素/网格，而是形成能用于动作选择的 <b>潜在上下文 \(z_t\)</b> 与更准的速度估计 \(\hat v_t\)。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>为什么强调长距离？</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  很多 RL 行走论文在真实机上只展示“几段短片段”。DreamWaQ 强调单次 run 在户外复杂条件下持续运行数百米（第5–6页）。
+                </p>
+                <p style="margin-bottom:0">
+                  这直接暴露了工程痛点：电机过热、功率不均衡、湿滑/泥地带来的持续扰动与估计漂移等。作者在 reward 中加入 <b>功率分布项</b> 来针对“长期耐久性”（第3页 Table I）。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 数学表示与建模 -->
+      <section id="math" class="reveal">
+        <div class="section-title">
+          <h2>数学表示与建模：从 POMDP 到网络输入/损失/策略优化</h2>
+          <div class="meta">对应论文：II-A/II-B/II-C（第2–4页）</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>1) 任务形式化：POMDP + 时间窗口观测</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  环境被建模为无限时域 POMDP：
+                  \(M=(\mathcal S,\mathcal O,\mathcal A,d_0,p,r,\gamma)\)（第2页 II-A）。
+                  状态 \(s_t\in\mathcal S\)、观测 \(o_t\in\mathcal O\)、动作 \(a_t\in\mathcal A\) 都是连续的。
+                </p>
+                <p>
+                  为了在“无外感知”的情况下仍能包含足够信息，作者把过去 \(H\) 步观测拼成时间窗口：
+                  \[
+                    o_t^H = [o_t, o_{t-1}, \ldots, o_{t-H}]^\top,\quad H=5.
+                  \]
+                  这是让策略从短期动力学里推断地形/扰动的关键。
+                </p>
+                <p style="margin-bottom:0">
+                  同时定义上下文向量 \(z_t\)，表示世界状态的潜在表征，由 CENet 从 \(o_t^H\) 推断（II-A/II-C）。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>2) Actor 与 Critic 的输入：不对称的“信息差”</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  <b>Actor</b>（策略）形式为 \(\pi_\phi(a_t\mid o_t,\hat v_t,z_t)\)（第2页 II-B.1），其中单步 proprioception
+                  \[
+                    o_t = [\omega_t, g_t, c_t, \theta_t, \dot\theta_t, a_{t-1}]^\top. \tag{1}
+                  \]
+                  这里 \(\omega_t\) 为机体角速度、\(g_t\) 为机体坐标系下重力向量、\(c_t\) 为速度指令、\(\theta_t,\dot\theta_t\) 为关节角/角速度，\(a_{t-1}\) 为上一动作。
+                </p>
+                <p>
+                  <b>Critic</b>（价值）接收特权状态：
+                  \[
+                    s_t = [o_t,\ v_t,\ d_t,\ h_t]^\top. \tag{2}
+                  \]
+                  其中 \(d_t\) 是对机体随机施加的扰动力，\(h_t\) 是周围高度图扫描（给 critic 的“外感知 cue”）。
+                  训练的目标是让 actor 从 proprioception 序列中 <b>隐式推断</b> \(d_t,h_t\) 的影响。
+                </p>
+                <p style="margin-bottom:0">
+                  <b>关键直觉：</b> critic 的价值估计更“懂地形”，因此 actor 的梯度会被导向能在不同地形下稳定拿高回报的内部表征。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:14px">
+          <div class="card">
+            <div class="card-inner">
+              <h3>3) 动作空间与低层控制：关节目标角 + PD</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  动作 \(a_t\in\mathbb R^{12}\) 表示 12 个关节的“目标角偏移”，围绕站立姿态 \(\theta_{\text{stand}}\)：
+                  \[
+                    \theta_{\text{des}} = \theta_{\text{stand}} + a_t. \tag{3}
+                  \]
+                  目标角由每关节 PD 跟踪。
+                </p>
+                <p style="margin-bottom:0">
+                  真实机设定：policy + CENet 以 50Hz 输出目标角，PD 控制器以 200Hz 跟踪；\(K_p=28\), \(K_d=0.7\)（第4页 C 节）。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>4) 奖励函数：不仅要走稳，还要“走得久”</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  总奖励为各项子奖励加权和：
+                  \[
+                    r_t(s_t,a_t)=\sum_i w_i r_i. \tag{4}
+                  \]
+                  作者沿用常见 locomotion reward（速度跟踪、姿态稳定、关节功率等）以突出方法组件效果（第3页）。
+                </p>
+                <p style="margin-bottom:0">
+                  额外亮点：加入 <b>功率分布惩罚</b>，惩罚各电机功率 \(\tau\cdot\dot\theta\) 的方差 \(\mathrm{var}(\tau\dot\theta)\)，试图避免长距离时“某些电机更早过热”（第3页 Table I 的最后一项）。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-inner">
+            <h3>Table I（论文第3页）：奖励项逐条展开（复现关键）</h3>
+            <div class="prose" style="margin-bottom:10px">
+              下表为论文原表的结构化复刻。符号解释：\(v_{xy}\) 为机体平面线速度，\(\omega_{yaw}\) 为偏航角速度，\(g\) 为重力向量投影到机体坐标系，\(h\) 为机体高度，
+              \(p_{f,z,k}\) 为第 \(k\) 足端高度，\(v_{f,xy,k}\) 为足端平面速度，\(\tau\) 为关节力矩（第3页 Table I 说明）。
+            </div>
+            <table class="table" aria-label="Reward table">
+              <thead>
+                <tr>
+                  <th style="width:34%">Reward</th>
+                  <th>Equation \(r_i\)</th>
+                  <th class="right nowrap" style="width:16%">Weight \(w_i\)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="strong">Lin. velocity tracking</td>
+                  <td>\(\exp\!\big(-4\,(v^{cmd}_{xy}-v_{xy})^2\big)\)</td>
+                  <td class="right">\(1.0\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Ang. velocity tracking</td>
+                  <td>\(\exp\!\big(-4\,(\omega^{cmd}_{yaw}-\omega_{yaw})^2\big)\)</td>
+                  <td class="right">\(0.5\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Linear velocity (z)</td>
+                  <td>\(v_z^2\)</td>
+                  <td class="right">\(-2.0\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Angular velocity (xy)</td>
+                  <td>\(\omega_{xy}^2\)</td>
+                  <td class="right">\(-0.05\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Orientation</td>
+                  <td>\(\lVert g\rVert^2\)</td>
+                  <td class="right">\(-0.2\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Joint accelerations</td>
+                  <td>\(\ddot\theta^2\)</td>
+                  <td class="right">\(-2.5\times 10^{-7}\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Joint power</td>
+                  <td>\(|\tau|\,|\dot\theta|\)</td>
+                  <td class="right">\(-2\times 10^{-5}\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Body height</td>
+                  <td>\((h^{des}-h)^2\)</td>
+                  <td class="right">\(-1.0\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Foot clearance</td>
+                  <td>\((p^{des}_{f,z,k}-p_{f,z,k})^2\cdot v_{f,xy,k}\)</td>
+                  <td class="right">\(-0.01\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Action rate</td>
+                  <td>\((a_t-a_{t-1})^2\)</td>
+                  <td class="right">\(-0.01\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Smoothness</td>
+                  <td>\((a_t-2a_{t-1}+a_{t-2})^2\)</td>
+                  <td class="right">\(-0.01\)</td>
+                </tr>
+                <tr>
+                  <td class="strong">Power distribution</td>
+                  <td>\(\mathrm{var}(\tau\cdot\dot\theta)^2\)</td>
+                  <td class="right">\(-10^{-5}\)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:14px">
+          <div class="card">
+            <div class="card-inner">
+              <h3>5) CENet：结构与损失（复现最容易踩坑的部分）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  CENet 是“共享 encoder + 双 head decoder”（论文第3页 Fig.2）：输入 \(o_t^H\)，输出 \(\tilde v_t\) 与 \(\tilde o_{t+1}\)，并产生潜变量 \(z_t\)。
+                  总损失：
+                  \[
+                    \mathcal L_{CE} = \mathcal L_{est} + \mathcal L_{VAE}. \tag{5}
+                  \]
+                  速度估计损失：
+                  \[
+                    \mathcal L_{est} = \mathrm{MSE}(\tilde v_t, v_t). \tag{6}
+                  \]
+                  β-VAE 损失：
+                  \[
+                    \mathcal L_{VAE} = \mathrm{MSE}(\tilde o_{t+1}, o_{t+1}) + \beta\,D_{KL}(q(z_t\mid o_t^H)\,\|\,p(z_t)). \tag{7}
+                  \]
+                  其中先验 \(p(z_t)\) 取标准正态（作者理由：观测被归一化到零均值单位方差）。
+                </p>
+                <p style="margin-bottom:0">
+                  <b>复现建议：</b> β 值文中未在这 7 页摘要版里给出；若你要复现，建议从 \(\beta\in[1,5]\) 扫起，并观察 \(z_t\) 是否坍缩（KL≈0）或过强约束导致重构差。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="figure">
+            <div class="img">
+              <div class="ph">Figure 2（论文第3页）：CENet 结构占位符<br/>建议检索关键词：<span class="mono">Fig. 2 architecture of CENet</span></div>
+            </div>
+            <div class="cap">
+              <b>Fig.2 读图要点：</b> encoder 同时为“速度估计”和“下一步观测重构”服务。
+              这相当于强迫 encoder 学到能描述动力学的特征（既能前向预测也能反向对齐），从而在台阶绊脚等非平稳冲击下仍维持较稳的速度估计（论文第5页对 Fig.5 的解释）。
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-inner">
+            <h3>6) AdaBoot：一个很“工程味”的稳健训练阀门</h3>
+            <div class="prose">
+              <p style="margin-top:0">
+                AdaBoot 用跨域随机化环境的 episodic reward 向量 \(R\in\mathbb R^m\) 来判断训练是否稳定（第4页）。
+                bootstrap 概率：
+                \[
+                  p_{\text{boot}} = 1 - \tanh(CV(R)),\quad CV(R)=\frac{\sigma(R)}{\mu(R)}. \tag{8}
+                \]
+                \(\tanh\) 用于把 \(CV(R)\) 平滑上界到 1（文中表述）。
+              </p>
+              <div class="callout">
+                <div class="title"><span class="badge warn">你需要自己补齐的细节</span>AdaBoot 到底“bootstrap 了什么”？</div>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    在这份 7 页版本里，作者没有把 bootstrapping 的具体实现展开到“把哪些通道替换/混合、替换比例如何施加”。
+                    结合他们引用的 concurrent estimator 论文（[24]）的常见做法，可以合理推测是：
+                    <b>以概率 \(p_{\text{boot}}\) 使用估计器输出 \((\hat v_t,z_t)\) 来喂给 policy</b>，否则使用仿真真值（或更“干净”的信号）来降低早期噪声。
+                  </p>
+                  <p style="margin-bottom:0">
+                    若你要严格复现，建议去项目主页/代码（论文第2页脚注给出 project site）确认具体实现；或者在自己的实现里提供两个开关：<em>velocity bootstrap</em> 与 <em>context bootstrap</em> 分开做 ablation。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inline SVG: pipeline diagram -->
+        <div style="margin-top:14px" class="reveal">
+          <svg class="diagram" viewBox="0 0 1200 360" role="img" aria-label="DreamWaQ 训练与部署流程图（重绘）">
+            <defs>
+              <linearGradient id="g1" x1="0" x2="1">
+                <stop offset="0" stop-color="rgba(124,212,255,.35)"/>
+                <stop offset="1" stop-color="rgba(167,139,250,.30)"/>
+              </linearGradient>
+              <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="rgba(0,0,0,.35)"/>
+              </filter>
+            </defs>
+            <rect x="0" y="0" width="1200" height="360" fill="rgba(255,255,255,.02)"/>
+            <text x="26" y="38" fill="rgba(233,236,241,.90)" font-size="16" font-weight="700">DreamWaQ 流程（按论文 Fig.1/2 语义重绘）</text>
+            <text x="26" y="62" fill="rgba(168,176,194,.85)" font-size="12">训练：仿真 + critic 特权信息；部署：仅 proprioception + CENet</text>
+
+            <!-- Left: inputs -->
+            <g filter="url(#shadow)">
+              <rect x="26" y="98" rx="18" ry="18" width="320" height="226" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.10)"/>
+              <text x="52" y="130" fill="rgba(233,236,241,.92)" font-size="13" font-weight="700">部分观测（Actor 侧）</text>
+              <text x="52" y="156" fill="rgba(168,176,194,.92)" font-size="12">时间窗口 \(o_t^H\)（\(H=5\)）</text>
+              <text x="52" y="182" fill="rgba(168,176,194,.92)" font-size="12">\(\omega_t, g_t, c_t, \theta_t, \dot\theta_t, a_{t-1}\)</text>
+
+              <rect x="52" y="206" rx="14" ry="14" width="268" height="92" fill="rgba(0,0,0,.16)" stroke="rgba(255,255,255,.10)"/>
+              <text x="68" y="234" fill="rgba(233,236,241,.88)" font-size="12" font-weight="700">CENet（共享 encoder）</text>
+              <text x="68" y="257" fill="rgba(168,176,194,.92)" font-size="12">输出：\(\hat v_t\)（速度） + \(z_t\)（上下文）</text>
+              <text x="68" y="280" fill="rgba(168,176,194,.92)" font-size="12">辅助：重构 \(\tilde o_{t+1}\)（β-VAE）</text>
+            </g>
+
+            <!-- Middle: actor -->
+            <g filter="url(#shadow)">
+              <rect x="380" y="118" rx="18" ry="18" width="320" height="186" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.10)"/>
+              <text x="404" y="150" fill="rgba(233,236,241,.92)" font-size="13" font-weight="700">Policy / Actor \(\pi_\phi\)</text>
+              <text x="404" y="176" fill="rgba(168,176,194,.92)" font-size="12">输入：\(o_t, \hat v_t, z_t\)</text>
+              <text x="404" y="200" fill="rgba(168,176,194,.92)" font-size="12">输出：动作 \(a_t\in\mathbb R^{12}\)</text>
+              <text x="404" y="224" fill="rgba(168,176,194,.92)" font-size="12">关节目标：\(\theta_{des}=\theta_{stand}+a_t\)</text>
+              <text x="404" y="248" fill="rgba(168,176,194,.92)" font-size="12">低层：PD @ 200Hz</text>
+            </g>
+
+            <!-- Right: critic -->
+            <g filter="url(#shadow)">
+              <rect x="734" y="98" rx="18" ry="18" width="440" height="226" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.10)"/>
+              <text x="758" y="130" fill="rgba(233,236,241,.92)" font-size="13" font-weight="700">Value / Critic \(V(s_t)\)（训练期）</text>
+              <text x="758" y="156" fill="rgba(168,176,194,.92)" font-size="12">输入特权状态：\(s_t=[o_t, v_t, d_t, h_t]^\top\)</text>
+              <text x="758" y="180" fill="rgba(168,176,194,.92)" font-size="12">其中：\(h_t\)=高度图扫描，\(d_t\)=随机扰动</text>
+              <rect x="758" y="206" rx="14" ry="14" width="392" height="92" fill="rgba(0,0,0,.16)" stroke="rgba(255,255,255,.10)"/>
+              <text x="776" y="234" fill="rgba(233,236,241,.88)" font-size="12" font-weight="700">PPO 更新</text>
+              <text x="776" y="257" fill="rgba(168,176,194,.92)" font-size="12">优势/价值更准 → 梯度塑形 actor</text>
+              <text x="776" y="280" fill="rgba(168,176,194,.92)" font-size="12">AdaBoot：用奖励 CV 控制 bootstrap 概率</text>
+            </g>
+
+            <!-- Arrows -->
+            <g stroke="url(#g1)" stroke-width="2.2" fill="none" opacity=".95">
+              <path d="M346,210 C360,210 360,210 380,210" />
+              <path d="M700,210 C716,210 716,210 734,210" />
+            </g>
+            <g fill="rgba(124,212,255,.80)">
+              <circle cx="380" cy="210" r="3.5"/>
+              <circle cx="734" cy="210" r="3.5"/>
+            </g>
+
+            <!-- Bottom note -->
+            <text x="26" y="346" fill="rgba(110,120,146,.92)" font-size="11">
+              部署期：critic 与特权信息不可用，仅保留 actor + CENet（论文第4页：推理 50Hz）
+            </text>
+          </svg>
+        </div>
+      </section>
+
+      <!-- 实验方法与实验设计 -->
+      <section id="experiments" class="reveal">
+        <div class="section-title">
+          <h2>实验方法与实验设计：按“可复现”标准把细节摊开</h2>
+          <div class="meta">对应论文：III（第4–6页）</div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="实验标签页">
+          <div class="tab active" role="tab" aria-selected="true" data-tab="tab-sim">仿真训练</div>
+          <div class="tab" role="tab" aria-selected="false" data-tab="tab-real">真实部署</div>
+          <div class="tab" role="tab" aria-selected="false" data-tab="tab-baselines">对比方法</div>
+          <div class="tab" role="tab" aria-selected="false" data-tab="tab-repro" id="tabRepro">复现清单</div>
+        </div>
+
+        <div class="tabpanel active" id="tab-sim">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-inner">
+                <h3>仿真平台与训练规模</h3>
+                <div class="prose">
+                  <ul class="list">
+                    <li>模拟器：<b>Isaac Gym</b>（基于 [12] 的开源实现）（第4页 B）。</li>
+                    <li>并行环境：<b>4096</b> 个 domain-randomized agents 同步训练（第4页 B）。</li>
+                    <li>训练迭代：<b>1000</b> iterations（policy、value、CENet 同步训练）（第4页 B）。</li>
+                    <li>算法：<b>PPO</b>，clipping range \(0.2\)，GAE \(\lambda=0.95\)，折扣 \(\gamma=0.99\)（第4页 B）。</li>
+                    <li>优化器：Adam，学习率 \(10^{-3}\)（第4页 B）。</li>
+                    <li>算力：i7-8700 + RTX 3060Ti，作者称 DreamWaQ 训练约 1 小时，等效真实世界约 46 天数据（第4页 B）。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-inner">
+                <h3>Domain Randomization（Table II）</h3>
+                <div class="prose" style="margin-bottom:10px">
+                  下表为论文第4页 Table II 的复刻。建议你在复现时优先保证这些范围一致，因为 DreamWaQ 的“零样本 sim-to-real”很吃 DR。
+                </div>
+                <table class="table" aria-label="Domain randomization table">
+                  <thead>
+                    <tr>
+                      <th style="width:36%">Parameter</th>
+                      <th>Range</th>
+                      <th class="right nowrap" style="width:16%">Unit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td class="strong">Payload</td><td>\([-1,\,2]\)</td><td class="right">kg</td></tr>
+                    <tr><td class="strong">\(K_p\) factor</td><td>\([0.9,\,1.1]\)</td><td class="right">Nm/rad</td></tr>
+                    <tr><td class="strong">\(K_d\) factor</td><td>\([0.9,\,1.1]\)</td><td class="right">Nms/rad</td></tr>
+                    <tr><td class="strong">Motor strength factor</td><td>\([0.9,\,1.1]\)</td><td class="right">Nm</td></tr>
+                    <tr><td class="strong">Center of mass shift</td><td>\([-50,\,50]\)</td><td class="right">mm</td></tr>
+                    <tr><td class="strong">Friction coefficient</td><td>\([0.2,\,1.25]\)</td><td class="right">-</td></tr>
+                    <tr><td class="strong">System delay</td><td>\([0.0,\,15.0]\)</td><td class="right">ms</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:14px">
+            <div class="card">
+              <div class="card-inner">
+                <h3>Curriculum：从平地到台阶的“游戏式升级”</h3>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    作者采用 game-inspired curriculum（引用 [12]），地形包含 smooth、rough、discretized、stair，
+                    并有 10 个坡度等级，倾角范围 \([0^\circ,22^\circ]\)（第3页 II-B.5）。
+                  </p>
+                  <p style="margin-bottom:0">
+                    另外使用 grid-adaptive curriculum（引用 [23]）用于低速行走，可改善转向稳定性并减少绊脚（第3页 II-B.5）。
+                    <b>复现提示：</b> 这部分往往决定“能否学到稳定转向”，建议把课程表/难度调度写成明确的 schedule（例如按平均回报阈值升阶）。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="figure">
+              <div class="img">
+                <div class="ph">Figure 3（论文第4页）：学习曲线占位符<br/>建议检索关键词：<span class="mono">Fig. 3 Learning curves DreamWaQ</span></div>
+              </div>
+              <div class="cap">
+                <b>Fig.3 读图提示：</b> DreamWaQ 的平均 episodic reward 全程领先，且接近 oracle（oracle 可直接拿高度图）；
+                EstimatorNet 早期更高但后期在更难地形出现崩溃（论文第4页对 Fig.3 的文字解读）。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabpanel" id="tab-real">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-inner">
+                <h3>真实机硬件/软件栈（Unitree A1）</h3>
+                <div class="prose">
+                  <ul class="list">
+                    <li>平台：<b>Unitree A1</b>（第4页 C）。</li>
+                    <li>算力：机顶 Intel NUC 运行估计与控制；另有 onboard PC + 电池带来约 <b>500g 载荷</b>（第4页 C）。</li>
+                    <li>通信：使用 PyBind 接口发送关节角命令（第4页 C 引用 [38]）。</li>
+                    <li>推理频率：policy 与 CENet <b>50Hz 同步</b>（第4页 C）。</li>
+                    <li>关节 PD：<b>200Hz</b>，\(K_p=28, K_d=0.7\)（第4页 C）。</li>
+                    <li>轨迹测量：长距离实验用 <b>RTK-GPS 10Hz</b>（第5页 G）。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="figure">
+              <div class="img">
+                <div class="ph">Figure 7（论文第6页）：户外课程与 RTK-GPS 轨迹占位符<br/>建议检索关键词：<span class="mono">Fig. 7 outdoor trajectory RTK-GPS</span></div>
+              </div>
+              <div class="cap">
+                <b>Fig.7 读图要点：</b> Course A（yard，自然非结构化）与 Course B（hill hiking track）分别记录海拔变化色条；
+                总长约 \(430\text{m}\) 与 \(465\text{m}\)，Course B 最高爬升约 22m（第5–6页）。
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:14px">
+            <div class="figure">
+              <div class="img">
+                <div class="ph">Figure 6（论文第6页）：绊脚/打滑的“足端反射”序列占位符<br/>建议检索关键词：<span class="mono">Fig. 6 Foot reflex stumble slip</span></div>
+              </div>
+              <div class="cap">
+                <b>Fig.6 读图要点：</b> (a) 上下楼梯采用不同步态：下楼更贴地、前足伸远以快速找稳定落足；上楼显著抬高步幅以跨越台阶；
+                (b) 打滑时能检测不规则落足→适应→恢复正常步态（第5页 F + 第6页图注）。
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-inner">
+                <h3>长距离课程细节（作者写得很“工程”）</h3>
+                <div class="prose">
+                  <div class="callout">
+                    <div class="title"><span class="badge good">Course A</span>yard：坡地 + 可变形地面 + 台阶 + 雨后湿滑</div>
+                    <p style="margin-top:0">
+                      机器人会遇到厚植被缠住腿；作者描述策略会通过 <b>增大关节功率</b> 来挣脱。
+                      最难点：台阶与可变形斜坡；雨后下楼梯更滑，泥地斜坡足端会“踩得更深”，但 DreamWaQ 仍能通过（第6页 1)）。
+                    </p>
+                  </div>
+                  <div class="callout" style="margin-top:10px">
+                    <div class="title"><span class="badge warn">Course B</span>hill：爬坡 + 砂石 + 电机快速升温</div>
+                    <p style="margin-top:0">
+                      夏季电机升温快，作者选择低速指令减小扭矩；爬坡时前腿电机更易过热进入保护，但 DreamWaQ 仍完成 465m/10min 并到达山顶（第6页 2)）。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabpanel" id="tab-baselines">
+          <div class="card">
+            <div class="card-inner">
+              <h3>对比方法（全部只用 proprioception）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  作者强调公平性：所有方法使用相同 curriculum 与 reward，并固定网络结构与随机种子；激活函数为 ELU（第4页 A）。
+                </p>
+                <ul class="list">
+                  <li><b>Baseline [12]</b>：无适应机制的直接策略学习。</li>
+                  <li><b>AdaptationNet [20],[21]</b>：teacher-student 框架 + 环境因子编码器；策略结构含 1D CNN + MLP（第4页 A）。</li>
+                  <li><b>EstimatorNet [24]</b>：并行训练显式状态估计器，但不估 context（第4页 A）。</li>
+                  <li><b>DreamWaQ w/o AdaBoot</b>：去掉自适应 bootstrap。</li>
+                  <li><b>DreamWaQ w/ AdaBoot</b>：完整方法。</li>
+                </ul>
+                <div class="hr"></div>
+                <p style="margin:0">
+                  在这类对比里，最重要的不是“算法名字”，而是每个方法能否处理 <b>估计误差</b> + <b>地形非平稳冲击</b> + <b>训练/部署信息差</b> 的组合拳。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:14px">
+            <div class="figure">
+              <div class="img">
+                <div class="ph">Figure 4（论文第5页）：命令跟踪误差箱线图占位符<br/>建议检索关键词：<span class="mono">Fig. 4 command tracking error boxplot</span></div>
+              </div>
+              <div class="cap">
+                <b>Fig.4 读图要点：</b> 以 ATE（绝对跟踪误差）衡量 \(v_x, v_y, \omega_z\)；
+                DreamWaQ 显著优于基线，且 AdaBoot 进一步提升；作者用 paired t-test 标出 \(p<10^{-4}\)（第5页 D + 图注）。
+              </div>
+            </div>
+
+            <div class="figure">
+              <div class="img">
+                <div class="ph">Figure 5（论文第5页）：CENet vs EstimatorNet 速度估计误差占位符<br/>建议检索关键词：<span class="mono">Fig. 5 estimation error foot stumble</span></div>
+              </div>
+              <div class="cap">
+                <b>Fig.5 读图要点：</b> 平地行走两者误差都小；下楼绊脚时 EstimatorNet 误差显著上升，而 CENet 维持较低误差（第5页 E）。
+                作者归因：β-VAE 让 encoder 学到前后向动力学，且 DreamWaQ 联合训练让 encoder 能“暗含”地形推理，帮助显式速度估计。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabpanel" id="tab-repro">
+          <div class="grid-2">
+            <div class="card" id="reproChecklist">
+              <div class="card-inner">
+                <h3>复现清单（按“你现在就能开工”的粒度）</h3>
+                <div class="prose">
+                  <ol class="list">
+                    <li><b>仿真/代码底座</b>：Isaac Gym + 参考 [12] 的实现；确认 A1 URDF/动力学一致。</li>
+                    <li><b>观测构造</b>：单步 \(o_t=[\omega_t,g_t,c_t,\theta_t,\dot\theta_t,a_{t-1}]\)，并拼成 \(o_t^H\)（\(H=5\)）。</li>
+                    <li><b>不对称输入</b>：critic 额外拿 \(v_t,d_t,h_t\)（高度图扫描），actor 不拿。</li>
+                    <li><b>动作/低层</b>：\(a_t\in\mathbb R^{12}\)，\(\theta_{des}=\theta_{stand}+a_t\)，PD 跟踪；真实机 \(K_p=28,K_d=0.7\)，200Hz。</li>
+                    <li><b>reward</b>：严格复刻 Table I（尤其 action rate/smoothness/功率分布）。</li>
+                    <li><b>curriculum</b>：地形类型 + 10 级坡度 \([0^\circ,22^\circ]\)，加入 grid-adaptive（低速转向稳定）。</li>
+                    <li><b>Domain Randomization</b>：严格按 Table II（payload/增益/摩擦/时延/质心偏移）。</li>
+                    <li><b>训练超参</b>：PPO clip=0.2，GAE=0.95，\(\gamma=0.99\)，Adam lr=\(10^{-3}\)，4096 env，1000 iters。</li>
+                    <li><b>CENet</b>：共享 encoder + 速度 head + β-VAE head；损失式(5)-(7)；需要你补齐 β、网络宽度与潜变量维度（论文图示里出现 \(16\times 1\) 的 context 维度提示，但未写死）。</li>
+                    <li><b>AdaBoot</b>：按式(8)算 \(p_{\text{boot}}\)，但需你确认“bootstrap 的具体通道与替换策略”。建议做 w/o AdaBoot 与 w/ AdaBoot。</li>
+                    <li><b>评测</b>：命令跟踪 ATE（Gazebo 取真值）；推搡鲁棒性（随机速度扰动直至摔倒，统计 max push 与 30min survival rate）；真实世界长距离用 RTK-GPS（10Hz）。</li>
+                  </ol>
+                </div>
+                <div class="hr"></div>
+                <div class="tiny">
+                  复现最常见失败点：<b>(i)</b> DR 范围不够导致 sim-to-real 崩；<b>(ii)</b> CENet/策略归一化不一致；<b>(iii)</b> curriculum 调度不稳导致转向学坏；
+                  <b>(iv)</b> AdaBoot 实现细节偏差（建议先跑 w/o AdaBoot 打通主链路）。
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-inner">
+                <h3>建议的最小可行复现实验（MVP）</h3>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    如果你不想一开始就把所有工程细节做满，可以按下面顺序递进：
+                  </p>
+                  <ol class="list">
+                    <li><b>MVP-0</b>：只复刻 [12] baseline 在平地/小坡度能走稳（确认动力学/PD/奖励没错）。</li>
+                    <li><b>MVP-1</b>：加不对称 critic（输入 \(h_t,d_t\)），不加 CENet（速度直接用真值/简易估计）→ 看 learning curve 是否明显提升。</li>
+                    <li><b>MVP-2</b>：引入 CENet（先不做 AdaBoot），让 actor 用 \(\hat v_t,z_t\) → 重点看台阶环境下是否更稳、估计误差是否像 Fig.5 一样抗冲击。</li>
+                    <li><b>MVP-3</b>：加入 AdaBoot → 看 Fig.4/表III 那类鲁棒指标是否提升。</li>
+                    <li><b>MVP-Real</b>：先室内地毯/木地/小台阶短程，再上户外 Course A 类“低风险”路径。</li>
+                  </ol>
+                </div>
+
+                <div class="hr"></div>
+                <div class="callout">
+                  <div class="title"><span class="badge warn">现实提醒</span>论文未给出的关键“空白格”</div>
+                  <div class="prose">
+                    <ul class="list" style="margin-top:0">
+                      <li>CENet 的具体层宽/卷积核/潜变量维度与 β 值（图示可推测，但未文本说明）。</li>
+                      <li>AdaBoot 的 bootstrap 细节（替换哪一路信号、替换比例、是否对 actor/critic 同时作用）。</li>
+                      <li>高度图扫描 \(h_t\) 的构造方式（分辨率/范围/对齐方式）——但只用于 critic。复现时你仍需决定怎么从仿真地形生成。</li>
+                    </ul>
+                    <p style="margin-bottom:0">
+                      这并不致命：因为部署期用不到 \(h_t\)，你可以在“合理且稳定”的生成方式上选择一个实现，
+                      只要 critic 能利用它产生更区分地形的价值估计，actor 就会受益。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <div class="card-inner">
+              <h3>Table III（论文第5页）：推搡鲁棒性测试结果（关键结论表）</h3>
+              <div class="prose" style="margin-bottom:10px">
+                指标：最大推搡速度（m/s）与 30 分钟随机行走的生存率（%）（第5页 F）。
+              </div>
+              <table class="table" aria-label="Robustness table">
+                <thead>
+                  <tr>
+                    <th>Algorithm</th>
+                    <th class="right nowrap">Max. push (m/s)</th>
+                    <th class="right nowrap">Survival rate (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Baseline</td>
+                    <td class="right">\(0.511 \pm 0.053\)</td>
+                    <td class="right">\(20.51 \pm 6.44\)</td>
+                  </tr>
+                  <tr>
+                    <td>AdaptationNet</td>
+                    <td class="right">\(0.714 \pm 0.096\)</td>
+                    <td class="right">\(82.37 \pm 2.49\)</td>
+                  </tr>
+                  <tr>
+                    <td>EstimatorNet</td>
+                    <td class="right">\(0.871 \pm 0.124\)</td>
+                    <td class="right">\(80.92 \pm 5.73\)</td>
+                  </tr>
+                  <tr>
+                    <td>DreamWaQ w/o AdaBoot</td>
+                    <td class="right">\(1.015 \pm 0.121\)</td>
+                    <td class="right">\(90.71 \pm 1.25\)</td>
+                  </tr>
+                  <tr>
+                    <td class="strong">DreamWaQ w/ AdaBoot</td>
+                    <td class="right strong">\(1.121 \pm 0.164\)</td>
+                    <td class="right strong">\(95.23 \pm 1.61\)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 实验结果与核心结论 -->
+      <section id="results" class="reveal">
+        <div class="section-title">
+          <h2>实验结果与核心结论：DreamWaQ 为什么赢？赢在哪里？</h2>
+          <div class="meta">对应论文：Fig.3–7 + Table III（第4–6页）</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 1：学习效率与最终回报都更好，并接近“oracle”</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  学习曲线（Fig.3）显示 DreamWaQ 全程领先其它仅 proprioception 方法，且“几乎达到 oracle policy”的表现；
+                  oracle 在训练中直接获得高度图测量（类似 [12]）（第4页 Fig.3 图注与正文）。
+                </p>
+                <div class="callout">
+                  <div class="title"><span class="badge good">关键洞察</span>不对称 critic 让“地形信息”以梯度形式注入 actor</div>
+                  <div class="prose">
+                    <p style="margin-top:0">
+                      这类结果通常意味着：critic 的特权信息不是给 actor “抄答案”，而是让 actor 在训练中获得更低方差、更对地形敏感的优势估计。
+                      于是 actor 学到的表征更能泛化到挑战地形与真实世界扰动。
+                    </p>
+                    <p style="margin-bottom:0">
+                      反过来看 teacher-student + BC：学生只能学老师在“成功轨迹”上的动作，探索不足，且性能被老师上界（作者在 II-B 明确批评）。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 2：命令跟踪更准，AdaBoot 还能再“补一刀”</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  命令跟踪在 Gazebo 做 10 分钟随机指令（每 10 秒采样一次指令，区间 \([-1,1]\)），跑 5 次不同种子验证可重复性（第4页 D）。
+                  结果用 ATE 箱线图展示（Fig.4），DreamWaQ 显著优于基线，且 AdaBoot 带来统计显著提升（\(p<10^{-4}\)）（第5页 D + 图注）。
+                </p>
+                <p style="margin-bottom:0">
+                  你可以把 AdaBoot 理解成：当策略还不稳定时别用噪声估计去“带偏”策略；当策略趋于收敛时才逐步引入估计噪声以增强鲁棒性。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:14px">
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 3：CENet 在“冲击事件”下的估计更稳</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  Fig.5 在台阶环境比较 CENet vs EstimatorNet 的速度估计平方误差：
+                  平地两者都小；但在“下楼绊脚”瞬间 EstimatorNet 误差激增，可能导致灾难性失败；
+                  CENet 则维持较准估计，使策略能继续安全爬楼（第5页 E）。
+                </p>
+                <div class="callout">
+                  <div class="title"><span class="badge good">作者的归因</span>前后向动力学 + 隐式地形推理 → 帮助显式估计</div>
+                  <div class="prose">
+                    <p style="margin-top:0">
+                      (1) β-VAE 的重构让 encoder 学到更一般的动力学特征；(2) 与 DreamWaQ 联合训练时，encoder 也在为“地形表征”服务，
+                      所以它能在冲击时用潜变量 \(z_t\) 提供额外条件信息，提升速度估计稳定性（第5页 E）。
+                    </p>
+                    <p style="margin-bottom:0">
+                      这点非常重要：四足控制里“状态估计误差 → 控制误差”的闭环放大很常见，尤其在台阶/打滑等不连续接触里。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 4：鲁棒性更强（推搡/随机行走生存率）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  推搡实验：每秒随机方向施加随机速度扰动（沿机体坐标 \(x,y,z\)），直到跌倒；并统计 30min 随机行走生存率（第5页 F）。
+                  Table III 显示 DreamWaQ w/ AdaBoot 达到最高 max push 与最高 survival rate。
+                </p>
+                <p style="margin-bottom:0">
+                  作者观察：大多数方法在指令突变（需要快速刹车与改向）时更容易摔；DreamWaQ 依靠“估计更准 + 策略更鲁棒”的耦合获得优势（第5页 F）。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:14px">
+          <div class="card">
+            <div class="card-inner">
+              <h3>结论 5：真实世界“足端反射”与长距离验证</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  真实世界中，DreamWaQ 能对绊脚与打滑进行快速步态调整（Fig.6）并恢复正常行走（第5页 F）。
+                  长距离课程 A/B 在多种地表（坡地、草地、泥地、台阶、砂石、沥青）与湿滑条件下完成单次 run（第6页）。
+                </p>
+                <p style="margin-bottom:0">
+                  这里的“硬指标”不是走过一次台阶，而是持续运行中对电机温度、功率分配、估计漂移等工程因素的抗性。
+                  作者在 Course B 明确提到前腿电机更易过热并触发保护，但仍能完成爬坡（第6页）。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>一句话总结：DreamWaQ 赢在“闭环一致性”</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  很多方法把“地形估计”和“行走控制”拆成两个松耦合模块：估计错了就错了，控制照吃。
+                  DreamWaQ 更像一个 <b>端到端闭环</b>：critic 用特权信息给出更好的价值信号，逼迫 actor/CENet 学到能“为控制服务”的表示；
+                  AdaBoot 则用训练稳定性来调节噪声注入，减少早期误导。
+                </p>
+                <p style="margin-bottom:0">
+                  这也解释了为什么它能在台阶冲击与长距离户外这种“最容易暴露闭环脆弱性”的场景中占优。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 你的评论（犀利 reviewer） -->
+      <section id="review" class="reveal">
+        <div class="section-title">
+          <h2>我的锐评：优点很实在，但也有“没说清楚/没做够”的地方</h2>
+          <div class="meta">以审稿人视角，直指贡献含金量与隐藏成本</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>我认为这篇工作的强项</h3>
+              <div class="prose">
+                <ul class="list">
+                  <li><b>切中真实痛点：</b>外感知失效/难估物理属性是野外部署常态；“只用 proprioception 也能走复杂地形”非常工程友好。</li>
+                  <li><b>思路简洁但有效：</b>不对称 actor-critic 是已知工具，但作者把它用于“隐式地形想象”，并用长距离实机把故事讲实。</li>
+                  <li><b>CENet 的设计有含金量：</b>共享 encoder + 预测下一观测的自监督信号（β-VAE）给速度估计提供稳定先验，这种“把 estimator 做得像动力学表征学习器”的方向值得推广。</li>
+                  <li><b>耐久性意识：</b>reward 里加功率分布惩罚，虽然简单，但这恰好是很多学术论文忽略的“长期运行”杀手（电机过热/单电机负载偏置）。</li>
+                  <li><b>对比设置相对克制：</b>统一 reward/curriculum/架构/种子，至少避免了“靠调参赢”的典型套路（第4页 A）。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>我认为最需要被追问的不足</h3>
+              <div class="prose">
+                <ul class="list">
+                  <li><b>“隐式想象”缺少可解释性证据：</b>作者声称可隐式推断摩擦/回弹/障碍等，但正文几乎没有对 \(z_t\) 的可视化、可分离性或与地形因素的对应分析。否则很难判断它是在“真学到了地形”，还是“学到了某种步态鲁棒 prior”。</li>
+                  <li><b>AdaBoot 细节不透明：</b>式(8)给了概率，但“bootstrap 到底怎么做”在这份版本里缺乏可复现描述。对于强调 sim-to-real 的工作，这类细节往往决定成败。</li>
+                  <li><b>特权信息设计可能很敏感：</b>critic 输入的高度图 \(h_t\) 如何构造（范围/分辨率/对齐/噪声）会影响价值学习的梯度形状；但论文没有展开，读者复现时容易踩坑。</li>
+                  <li><b>真实世界对比不够强：</b>长距离实机展示很棒，但缺少“同等 DR + 同等时间预算”的 baseline 实机长距离对比（例如 EstimatorNet/AdaptationNet 是否也能走 200m？在哪里失败？）。</li>
+                  <li><b>局限性承认但解决不够：</b>作者在结论中承认：需要先“腿碰到障碍”才能适应，高台阶需要融合外感知提前规划（第6页结论）。这其实揭示了 proprioception-only 方法的根本边界：<b>无法提前获知</b>将发生的几何突变。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-inner">
+            <h3>我会建议作者补哪些实验/分析（让贡献更“硬”）</h3>
+            <div class="prose">
+              <div class="grid-3">
+                <div class="callout">
+                  <div class="title"><span class="badge good">分析</span>\(z_t\) 是否真的“地形因子化”？</div>
+                  <p style="margin-top:0">
+                    用可控仿真生成不同摩擦/软硬/高度图模式，做 \(z_t\) 的线性探针、聚类、互信息估计，或展示不同地形下 \(z_t\) 维度的激活差异。
+                    否则“terrain imagination”更像一个营销术语。
+                  </p>
+                </div>
+                <div class="callout">
+                  <div class="title"><span class="badge warn">复现</span>把 AdaBoot 伪代码写清楚</div>
+                  <p style="margin-top:0">
+                    明确：bootstrap 哪些输入（\(\hat v_t\)、\(z_t\) 或两者）、真值与估计如何混合、概率如何在 batch 内应用、是否对 critic 同步应用。
+                    这是让别人复现/扩展的必要条件。
+                  </p>
+                </div>
+                <div class="callout">
+                  <div class="title"><span class="badge bad">对比</span>实机 failure case + 定量里程</div>
+                  <p style="margin-top:0">
+                    把 baseline 放到同样课程，统计平均无故障行走距离、跌倒原因分类（绊脚/打滑/过热/估计漂移），以及恢复能力。
+                    这能把“故事”升级为“证据链”。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 思考题 -->
+      <section id="questions" class="reveal">
+        <div class="section-title">
+          <h2>思考题：从理解到改进，难度递进</h2>
+          <div class="meta">建议读者在看完「数学建模」与「实验设计」后作答</div>
+        </div>
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-inner">
+              <h3>Q1（理解）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  DreamWaQ 为什么一定要用时间窗口 \(o_t^H\)（而不是只用 \(o_t\)）？
+                  请结合 POMDP 的部分可观测性，解释历史信息如何帮助策略隐式推断 \(h_t\) 与 \(d_t\) 的影响。
+                </p>
+                <div class="tiny">提示：想想“同一个姿态瞬间”无法区分“摩擦低”与“脚刚打滑”，但一段序列可以。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>Q2（分析）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  不对称 actor-critic 中，critic 看到特权信息会让优势估计更准确，但也可能导致 actor 的梯度“过度依赖”那些它永远看不到的变量。
+                  你如何判断 DreamWaQ 是否存在这种风险？你会设计什么 ablation 来验证？
+                </p>
+                <div class="tiny">提示：可以考虑逐步削弱 critic 的特权信息，或在训练末期关闭特权通道再 fine-tune。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>Q3（提升）</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  DreamWaQ 的局限是“必须先碰到障碍才适应”。请提出一个融合外感知的扩展方案：
+                  在不牺牲 proprioception-only 鲁棒性的前提下，让机器人对高台阶/坑洞具备前瞻性规划能力。
+                </p>
+                <div class="tiny">提示：你可以考虑把外感知作为“低频先验”，或训练一个可失效的外感知分支并用不确定性门控。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- One More Thing -->
+      <section id="more" class="reveal">
+        <div class="section-title">
+          <h2>One More Thing：你真正想在项目里用上的“落地建议”</h2>
+          <div class="meta">把论文方法翻译成工程决策</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-inner">
+              <h3>把 DreamWaQ 当作“训练范式”，而不只是一个模型</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  很多人看到这类论文会纠结“网络结构到底几层、宽度多少”。但这篇工作的真正价值更像一种范式：
+                </p>
+                <ul class="list">
+                  <li><b>训练时允许特权信息</b>（critic）来提升梯度质量；部署时坚持 <b>最小传感集</b>（actor）。</li>
+                  <li><b>估计器不是独立模块</b>，而是与策略共进化的表示学习器（CENet 的共享 encoder + 自监督重构）。</li>
+                  <li><b>噪声注入要“看时机”</b>（AdaBoot），避免早期把策略带偏。</li>
+                </ul>
+                <p style="margin-bottom:0">
+                  如果你在做其他机器人任务（例如抓取、跳跃、越障），同样可以把“特权 critic + 最小 actor”迁移过去。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-inner">
+              <h3>一个更“狠”的实用改进方向：把耐久性做成多目标优化</h3>
+              <div class="prose">
+                <p style="margin-top:0">
+                  论文只用一个简单的 \(\mathrm{var}(\tau\dot\theta)\) 惩罚功率分布，这很有用但还不够。
+                  在真实机上，过热与寿命往往受 <b>温度-时间积分</b> 与 <b>峰值扭矩</b> 影响更大。
+                </p>
+                <p>
+                  我会建议：
+                  <ul class="list">
+                    <li>引入电机温度的简化热模型（仿真中可用“等效温度状态”），让 reward 同时考虑任务与热安全。</li>
+                    <li>把“持续 10 分钟不触发保护”当作约束，用 Lagrangian/Constrained RL 做更系统的权衡。</li>
+                    <li>在课程 B 类爬坡任务中加入“前腿过热惩罚”与动作空间正则，逼策略学会更均衡的支撑分配。</li>
+                  </ul>
+                </p>
+                <p style="margin-bottom:0">
+                  这会把 DreamWaQ 的“走得久”从一个 bonus 项提升为方法论核心，特别适合野外巡检/探测类任务。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-inner">
+            <h3>给读者的“快速复盘”卡片</h3>
+            <div class="grid-3">
+              <div class="callout">
+                <div class="title"><span class="badge good">你应该记住</span>不对称 AC 的本质</div>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    不是让 actor 偷看答案，而是用更懂环境的 critic 提供更好的梯度信号。
+                    最终 actor 学到的表征依然必须来自它的可观测输入 \(o_t^H\)。
+                  </p>
+                </div>
+              </div>
+              <div class="callout">
+                <div class="title"><span class="badge good">你应该记住</span>CENet 的关键作用</div>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    CENet 把“状态估计”变成“动力学表征学习”：共享 encoder 同时服务速度估计与下一观测重构，
+                    在冲击/不连续接触下更稳。
+                  </p>
+                </div>
+              </div>
+              <div class="callout">
+                <div class="title"><span class="badge warn">你应该警惕</span>proprioception-only 的边界</div>
+                <div class="prose">
+                  <p style="margin-top:0">
+                    先验不足导致无法前瞻高台阶/坑洞；必须“先撞到”才能适应。
+                    这不是技巧能完全解决的，需要外感知或记忆/地图类机制补足。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <div class="footer">
+        <div class="row">
+          <div>
+            <div class="tiny">
+              资料来源：<span class="mono">DreamWaQ: Learning Robust Quadrupedal Locomotion With Implicit Terrain Imagination via Deep Reinforcement Learning</span>（arXiv:2301.10602v2）<br/>
+              本页面为“信息设计式”深度解读：重点覆盖研究动机、数学建模、实验可复现细节、核心结果与评审观点。
+            </div>
+          </div>
+          <div class="tiny">
+            快捷键：<span class="kbd">/</span> 搜索（页面内） · <span class="kbd">g</span><span class="kbd">m</span> 跳动机 · <span class="kbd">g</span><span class="kbd">r</span> 跳复现
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    // Smooth reveal on scroll
+    const revealEls = Array.from(document.querySelectorAll('.reveal'));
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(e=>{
+        if(e.isIntersecting){ e.target.classList.add('show'); }
+      });
+    }, { threshold: 0.12 });
+    revealEls.forEach(el=>io.observe(el));
+
+    // Navigation jump
+    const pills = Array.from(document.querySelectorAll('.pill[data-jump]'));
+    function setActiveByHash(hash){
+      pills.forEach(p=>p.classList.toggle('active', p.getAttribute('data-jump')===hash));
+    }
+    pills.forEach(p=>{
+      p.addEventListener('click', ()=>{
+        const target = p.getAttribute('data-jump');
+        const el = document.querySelector(target);
+        if(el){ el.scrollIntoView({behavior:'smooth', block:'start'}); history.replaceState(null,'',target); setActiveByHash(target); }
+      });
+    });
+
+    // Observe section to highlight nav
+    const sections = ['#motivation','#method','#math','#experiments','#results','#review','#questions','#more'].map(id=>document.querySelector(id)).filter(Boolean);
+    const sectionObserver = new IntersectionObserver((entries)=>{
+      const vis = entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+      if(vis){ setActiveByHash('#'+vis.target.id); }
+    }, { threshold: [0.18, 0.28, 0.38, 0.5] });
+    sections.forEach(s=>sectionObserver.observe(s));
+
+    // Tabs
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    const panels = Array.from(document.querySelectorAll('.tabpanel'));
+    tabs.forEach(t=>{
+      t.addEventListener('click', ()=>{
+        const id = t.getAttribute('data-tab');
+        tabs.forEach(x=>x.classList.toggle('active', x===t));
+        tabs.forEach(x=>x.setAttribute('aria-selected', x===t ? 'true':'false'));
+        panels.forEach(p=>p.classList.toggle('active', p.id===id));
+        // re-render math to avoid layout issues when panels show
+        setTimeout(()=>renderMath(), 0);
+      });
+    });
+
+    // KaTeX rendering
+    function renderMath(){
+      if(!window.renderMathInElement) return;
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "\\[", right: "\\]", display: true},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "$", right: "$", display: false}
+        ],
+        throwOnError: false,
+        strict: "ignore"
+      });
+    }
+    document.addEventListener('DOMContentLoaded', ()=>{
+      renderMath();
+    });
+
+    // Buttons
+    const btnJumpRepro = document.getElementById('btnJumpRepro');
+    btnJumpRepro?.addEventListener('click', ()=>{
+      // switch to experiments section and open repro tab
+      document.querySelector('#experiments')?.scrollIntoView({behavior:'smooth', block:'start'});
+      setTimeout(()=>{
+        document.querySelector('[data-tab="tab-repro"]')?.click();
+        document.querySelector('#reproChecklist')?.scrollIntoView({behavior:'smooth', block:'start'});
+      }, 450);
+    });
+
+    const toast = document.getElementById('toast');
+    let toastTimer = null;
+    function showToast(msg){
+      if(!toast) return;
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(()=>{ toast.style.display='none'; }, 2200);
+    }
+
+    const btnCopyBib = document.getElementById('btnCopyBib');
+    btnCopyBib?.addEventListener('click', async ()=>{
+      const bib = `@article{nahrendra2023dreamwaq,
+  title={DreamWaQ: Learning Robust Quadrupedal Locomotion With Implicit Terrain Imagination via Deep Reinforcement Learning},
+  author={Nahrendra, I Made Aswin and Yu, Byeongho and Myung, Hyun},
+  journal={arXiv preprint arXiv:2301.10602},
+  year={2023}
+}`;
+      try{
+        await navigator.clipboard.writeText(bib);
+        showToast('已复制 BibTeX（占位条目，可按需要补充版本信息）。');
+      }catch(e){
+        showToast('复制失败：浏览器阻止了剪贴板访问。你可以手动复制。');
+      }
+    });
+
+    const btnToggleMath = document.getElementById('btnToggleMath');
+    btnToggleMath?.addEventListener('click', ()=>{
+      renderMath();
+      showToast('已重新渲染 LaTeX。');
+    });
+
+    // Simple keyboard shortcuts
+    document.addEventListener('keydown', (e)=>{
+      const key = e.key.toLowerCase();
+      if(key === '/'){
+        e.preventDefault();
+        const q = prompt('页面内搜索（输入关键词）：');
+        if(!q) return;
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let node, found = null;
+        const needle = q.trim().toLowerCase();
+        while((node = walker.nextNode())){
+          if(node.nodeValue && node.nodeValue.toLowerCase().includes(needle)){
+            found = node.parentElement;
+            break;
+          }
+        }
+        if(found){
+          found.scrollIntoView({behavior:'smooth', block:'center'});
+          showToast('已定位到第一个匹配项。可再次按 / 继续搜索。');
+        }else{
+          showToast('未找到匹配项。');
+        }
+      }
+      if(key === 'g'){
+        // wait for second key
+        const handler = (ev)=>{
+          const k2 = ev.key.toLowerCase();
+          if(k2 === 'm'){ document.querySelector('#motivation')?.scrollIntoView({behavior:'smooth'}); }
+          if(k2 === 'r'){
+            document.querySelector('#experiments')?.scrollIntoView({behavior:'smooth'});
+            setTimeout(()=>{ document.querySelector('[data-tab="tab-repro"]')?.click(); }, 380);
+          }
+          document.removeEventListener('keydown', handler);
+        };
+        document.addEventListener('keydown', handler);
+      }
+    });
+  </script>
+
+  <!-- Source file citation: :contentReference[oaicite:0]{index=0} -->
+</body>
+</html>
